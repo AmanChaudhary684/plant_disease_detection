@@ -5,6 +5,8 @@ import { LanguageProvider, useLang, LangToggle } from "./LanguageContext";
 import ProgressionTracker, { AddToPlantModal } from "./ProgressionTracker";
 import { DISEASE_NAME_TRANSLATIONS } from "./translations";
 import { CommunityReportButton } from "./CommunityReport";
+import { AuthProvider, useAuth } from "./AuthContext";
+import LoginPage from "./LoginPage";
 
 // ── Weather Widget Component ───────────────────────────────────────────────
 function WeatherWidget({ disease }) {
@@ -163,6 +165,7 @@ function timeAgo(iso, lang) {
 }
 
 function AppInner() {
+  const { user, loading: authLoading, signOut } = useAuth();
   const [screen, setScreen]               = useState("home");
   const [dragOver, setDragOver]           = useState(false);
   const [preview, setPreview]             = useState(null);
@@ -265,6 +268,23 @@ function AppInner() {
     setIsOfflineResult(false); setShowOffline(false);
   };
 
+  // ── Auth gate: show login if not signed in ──
+  if (authLoading) {
+    return (
+      <div style={{ ...S.root, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid rgba(74,222,128,0.3)", borderTopColor: "#4ade80", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+          <div style={{ color: "#6ee7b7", fontSize: 14 }}>Loading...</div>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } } body { background: #050e07; }`}</style>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
+
   return (
     <div style={S.root}>
       <div style={S.noise} />
@@ -299,6 +319,21 @@ function AppInner() {
               📵 {t("offline_mode")}
             </button>
             <LangToggle />
+            {/* User profile */}
+            {user && (
+              <div style={S.userProfile}>
+                <img
+                  src={user.photoURL || ""}
+                  alt={user.displayName || "User"}
+                  style={S.userAvatar}
+                  referrerPolicy="no-referrer"
+                />
+                <span style={S.userName}>{user.displayName?.split(" ")[0]}</span>
+                <button style={S.signOutBtn} onClick={signOut} title="Sign out">
+                  ↗
+                </button>
+              </div>
+            )}
             <button style={{ ...S.historyBtn, ...(screen === "progression" ? S.historyBtnActive : {}) }}
               onClick={() => setScreen(prev => prev === "progression" ? "home" : "progression")}>
               📊 {lang === "hi" ? "प्रगति ट्रैकर" : "Progression"}
@@ -618,6 +653,10 @@ function AppInner() {
 }
 
 const S = {
+  userProfile: { display:"flex", alignItems:"center", gap:8, background:"rgba(22,163,74,0.12)", border:"1px solid rgba(74,222,128,0.25)", borderRadius:20, padding:"4px 12px 4px 4px" },
+  userAvatar: { width:28, height:28, borderRadius:"50%", objectFit:"cover", border:"2px solid rgba(74,222,128,0.4)" },
+  userName: { fontSize:13, color:"#a7f3d0", fontWeight:600, maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
+  signOutBtn: { background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.3)", color:"#f87171", borderRadius:"50%", width:24, height:24, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:12, fontWeight:700, padding:0, lineHeight:1 },
   root: { minHeight:"100vh", background:"linear-gradient(160deg,#050e07 0%,#071a0b 40%,#050e07 100%)", fontFamily:"'Cabinet Grotesk',sans-serif", color:"#e2f5e6", position:"relative", overflowX:"hidden" },
   noise: { position:"fixed", inset:0, zIndex:0, pointerEvents:"none", backgroundImage:"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E\")", opacity:0.4 },
   particles: { position:"fixed", inset:0, zIndex:0, pointerEvents:"none", overflow:"hidden" },
@@ -729,8 +768,10 @@ const S = {
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <AppInner />
-    </LanguageProvider>
+    <AuthProvider>
+      <LanguageProvider>
+        <AppInner />
+      </LanguageProvider>
+    </AuthProvider>
   );
 }
