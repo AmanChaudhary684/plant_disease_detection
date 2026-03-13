@@ -1,0 +1,214 @@
+{
+  "reports": [
+    {
+      "disease": "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)",
+      "state": "Unknown",
+      "timestamp": "2026-02-26T01:13:19.397023"
+    },
+    {
+      "disease": "Tomato___Late_blight",
+      "state": "Unknown",
+      "timestamp": "2026-02-26T09:01:15.309495"
+    },
+    {
+      "disease": "Tomato___Late_blight",
+      "state": "Unknown",
+      "timestamp": "2026-02-26T09:02:05.170206"
+    },
+    {
+      "disease": "Tomato___Late_blight",
+      "state": "Unknown",
+      "timestamp": "2026-02-26T09:22:06.662638"
+    },
+    {
+      "disease": "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)",
+      "state": "Unknown",
+      "timestamp": "2026-02-26T15:55:51.878612"
+    },
+    {
+      "disease": "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)",
+      "state": "Unknown",
+      "timestamp": "2026-02-26T16:06:40.182611"
+    },
+    {
+      "disease": "Peach___Bacterial_spot",
+      "state": "Unknown",
+      "timestamp": "2026-03-01T13:39:50.189417"
+    },
+    {
+      "disease": "Apple___Apple_scab",
+      "state": "Unknown",
+      "timestamp": "2026-03-01T15:39:24.205923"
+    },
+    {
+      "disease": "Corn_(maize)___Northern_Leaf_Blight",
+      "state": "Unknown",
+      "timestamp": "2026-03-03T19:27:40.476650"
+    },
+    {
+      "disease": "Squash___Powdery_mildew",
+      "state": "Unknown",
+      "timestamp": "2026-03-03T19:33:13.082553"
+    }
+  ],
+  "state_summary": {
+    "Uttar Pradesh": {
+      "Tomato_Late_blight": {
+        "count": 47,
+        "last_reported": "2026-02-26T01:13:19.390255"
+      },
+      "Potato___Late_blight": {
+        "count": 38,
+        "last_reported": "2026-02-26T01:13:19.390307"
+      },
+      "Tomato_Early_blight": {
+        "count": 29,
+        "last_reported": "2026-02-26T01:13:19.390317"
+      },
+      "Tomato__Tomato_YellowLeaf__Curl_Virus": {
+        "count": 21,
+        "last_reported": "2026-02-26T01:13:19.390323"
+      }
+    },
+    "Maharashtra": {
+      "Grape___Black_rot": {
+        "count": 34,
+        "last_reported": "2026-02-26T01:13:19.390328"
+      },
+      "Tomato_Bacterial_spot": {
+        "count": 26,
+        "last_reported": "2026-02-26T01:13:19.390334"
+      },
+      "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)": {
+        "count": 19,
+        "last_reported": "2026-02-26T01:13:19.390338"
+      }
+    },
+    "Karnataka": {
+      "Tomato_Early_blight": {
+        "count": 31,
+        "last_reported": "2026-02-26T01:13:19.390343"
+      },
+      "Pepper__bell___Bacterial_spot": {
+        "count": 22,
+        "last_reported": "2026-02-26T01:13:19.390348"
+      }
+    },
+    "Tamil Nadu": {
+      "Tomato__Tomato_YellowLeaf__Curl_Virus": {
+        "count": 41,
+        "last_reported": "2026-02-26T01:13:19.390352"
+      },
+      "Tomato_Leaf_Mold": {
+        "count": 18,
+        "last_reported": "2026-02-26T01:13:19.390357"
+      }
+    },
+    "Punjab": {
+      "Corn_(maize)___Common_rust_": {
+        "count": 28,
+        "last_reported": "2026-02-26T01:13:19.390363"
+      },
+      "Potato___Early_blight": {
+        "count": 23,
+        "last_reported": "2026-02-26T01:13:19.390368"
+      }
+    },
+    "Haryana": {
+      "Corn_(maize)___Northern_Leaf_Blight": {
+        "count": 19,
+        "last_reported": "2026-02-26T01:13:19.390374"
+      }
+    },
+    "West Bengal": {
+      "Tomato_Septoria_leaf_spot": {
+        "count": 24,
+        "last_reported": "2026-02-26T01:13:19.390379"
+      },
+      "Potato___Late_blight": {
+        "count": 33,
+        "last_reported": "2026-02-26T01:13:19.390384"
+      }
+    },
+    "Andhra Pradesh": {
+      "Tomato__Tomato_YellowLeaf__Curl_Virus": {
+        "count": 37,
+        "last_reported": "2026-02-26T01:13:19.390389"
+      }
+    },
+    "Telangana": {
+      "Tomato_Bacterial_spot": {
+        "count": 29,
+        "last_reported": "2026-02-26T01:13:19.390394"
+      }
+    },
+    "Gujarat": {
+      "Squash___Powdery_mildew": {
+        "count": 16,
+        "last_reported": "2026-02-26T01:13:19.390400"
+      },
+      "Corn_(maize)___Gray_leaf_spot": {
+        "count": 14,
+        "last_reported": "2026-02-26T01:13:19.390405"
+      }
+    },
+    "Himachal Pradesh": {
+      "Apple___Apple_scab": {
+        "count": 42,
+        "last_reported": "2026-02-26T01:13:19.390412"
+      },
+      "Apple___Cedar_apple_rust": {
+        "count": 18,
+        "last_reported": "2026-02-26T01:13:19.390416"
+      }
+    },
+    "Rajasthan": {
+      "Tomato__Tomato_mosaic_virus": {
+        "count": 12,
+        "last_reported": "2026-02-26T01:13:19.390421"
+      }
+    },
+    "Kerala": {
+      "Tomato_Leaf_Mold": {
+        "count": 22,
+        "last_reported": "2026-02-26T01:13:19.390425"
+      },
+      "Pepper__bell___Bacterial_spot": {
+        "count": 17,
+        "last_reported": "2026-02-26T01:13:19.390430"
+      }
+    },
+    "Madhya Pradesh": {
+      "Corn_(maize)___Common_rust_": {
+        "count": 21,
+        "last_reported": "2026-02-26T01:13:19.390435"
+      }
+    },
+    "Unknown": {
+      "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)": {
+        "count": 3,
+        "last_reported": "2026-02-26T16:06:40.182586"
+      },
+      "Tomato___Late_blight": {
+        "count": 3,
+        "last_reported": "2026-02-26T09:22:06.662614"
+      },
+      "Peach___Bacterial_spot": {
+        "count": 1,
+        "last_reported": "2026-03-01T13:39:50.189388"
+      },
+      "Apple___Apple_scab": {
+        "count": 1,
+        "last_reported": "2026-03-01T15:39:24.205893"
+      },
+      "Corn_(maize)___Northern_Leaf_Blight": {
+        "count": 1,
+        "last_reported": "2026-03-03T19:27:40.476585"
+      },
+      "Squash___Powdery_mildew": {
+        "count": 1,
+        "last_reported": "2026-03-03T19:33:13.082532"
+      }
+    }
+  }
+}
