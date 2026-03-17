@@ -1,7 +1,9 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import {
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
@@ -13,6 +15,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If we ever fall back to redirect-based login, this surfaces redirect errors.
+    // Successful redirect sign-in will still be captured by onAuthStateChanged.
+    getRedirectResult(auth).catch((err) => {
+      if (err) console.error("Redirect sign-in failed:", err);
+    });
+
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
@@ -24,6 +32,12 @@ export function AuthProvider({ children }) {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
+      const code = err?.code || "";
+      // Some browsers report blocked popups as "popup-closed-by-user".
+      if (code === "auth/popup-blocked" || code === "auth/popup-closed-by-user") {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      }
       console.error("Google sign-in failed:", err);
       throw err;
     }
