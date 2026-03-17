@@ -146,7 +146,7 @@ const SW = {
   changeBtn:{ width:"100%", background:"transparent", border:"1px solid rgba(74,222,128,0.2)", borderRadius:10, padding:"8px", color:"#6ee7b7", fontSize:12, cursor:"pointer", fontFamily:"'Cabinet Grotesk',sans-serif", marginTop:4 },
 };
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const SEVERITY_CONFIG = {
   None:    { bg: "#052e16", border: "#16a34a", text: "#4ade80", icon: "✅", label: "Healthy" },
