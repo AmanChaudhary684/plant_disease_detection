@@ -12,10 +12,23 @@ export default function LoginPage() {
     try {
       await signInWithGoogle();
     } catch (err) {
+      const code = err?.code || "";
+      if (code === "auth/popup-closed-by-user") {
+        setError("Sign-in popup was closed. If it keeps happening, enable popups (or try again—this app can fall back to redirect sign-in).");
+        return;
+      }
+      if (code === "auth/unauthorized-domain") {
+        setError(
+          "Sign-in blocked: this domain is not authorized in Firebase. Add your dev URL (e.g. localhost) to Firebase Console → Authentication → Settings → Authorized domains."
+        );
+        return;
+      }
+      if (code === "auth/popup-blocked") {
+        setError("Popup blocked by browser. Allow popups for this site and try again.");
+        return;
+      }
       setError(
-        err.code === "auth/popup-closed-by-user"
-          ? "Sign-in was cancelled."
-          : "Sign-in failed. Please try again."
+        `Sign-in failed${code ? ` (${code})` : ""}. ${err?.message ? err.message : "Please try again."}`
       );
     } finally {
       setLoading(false);
