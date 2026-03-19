@@ -148,6 +148,34 @@ const SW = {
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+// ── Voice Output ──────────────────────────────────────────────────────────
+const speak = (text, langCode = "en-IN") => {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel(); // stop any current speech
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = langCode;
+  utterance.rate = 0.9;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  window.speechSynthesis.speak(utterance);
+};
+
+const speakDiagnosis = (result, language) => {
+  if (!result) return;
+  const disease = result.diagnosis.top_prediction.display_name;
+  const conf    = result.diagnosis.top_prediction.confidence;
+  const sev     = result.disease_info.severity;
+  const treat   = result.disease_info.organic_treatment?.[0] || "";
+
+  if (language === "hi") {
+    const text = `निदान: ${disease}। विश्वास स्तर: ${conf} प्रतिशत। गंभीरता: ${sev}। उपचार: ${treat}`;
+    speak(text, "hi-IN");
+  } else {
+    const text = `Diagnosis: ${disease}. Confidence: ${conf} percent. Severity: ${sev}. First treatment: ${treat}`;
+    speak(text, "en-IN");
+  }
+};
+
 const SEVERITY_CONFIG = {
   None:    { bg: "#052e16", border: "#16a34a", text: "#4ade80", icon: "✅", label: "Healthy" },
   Low:     { bg: "#1c1917", border: "#ca8a04", text: "#fbbf24", icon: "🟡", label: "Low Risk" },
@@ -230,6 +258,7 @@ function AppInner() {
       const newHistory = [entry, ...history].slice(0, 20);
       setHistory(newHistory);
       localStorage.setItem("leafdoc_history", JSON.stringify(newHistory));
+      setTimeout(() => speakDiagnosis(data, lang), 500);
       setScreen("result");
     } catch (e) {
       setError(e.message || "Cannot connect to server. Make sure backend is running on port 8000.");
@@ -305,7 +334,7 @@ function AppInner() {
             </div>
           </div>
           <div style={S.headerRight}>
-            <div style={S.modelBadge}><span style={S.modelDot} />EfficientNet-B3 · 99%+ Accuracy</div>
+            <div style={S.modelBadge}><span style={S.modelDot} />EfficientNet-B3 · 99.74% Lab | 60.85% Real-World</div>
             <button style={{ ...S.historyBtn, ...(showHistory ? S.historyBtnActive : {}) }}
               onClick={() => setShowHistory(!showHistory)}>
               🕐 {t("history")} {history.length > 0 && <span style={S.historyCount}>{history.length}</span>}
@@ -514,6 +543,12 @@ function AppInner() {
                         : conf > 60 ? "⚠️ " + t("medium_confidence")
                         : "❓ " + t("low_confidence")}
                     </div>
+                    <button
+                      style={S.voiceBtn}
+                      onClick={() => speakDiagnosis(result, lang)}
+                      title={lang === "hi" ? "उपचार को बोलें" : "Read Treatment Aloud"}>
+                      🔊 {lang === "hi" ? "सुनें" : "Read Aloud"}
+                    </button>
                   </div>
 
                   <div style={S.altCard}>
@@ -763,6 +798,7 @@ const S = {
   treatNum: { width:22, height:22, borderRadius:"50%", background:"rgba(74,222,128,0.2)", color:"#4ade80", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 },
   disclaimer: { background:"rgba(251,191,36,0.08)", border:"1px solid rgba(251,191,36,0.2)", borderRadius:12, padding:"13px 16px", fontSize:12, color:"#fde68a", lineHeight:1.65 },
   scanAgainBtn: { width:"100%", padding:"15px", borderRadius:14, border:"1px solid rgba(74,222,128,0.3)", background:"rgba(74,222,128,0.08)", color:"#86efac", fontFamily:"'Clash Display',sans-serif", fontSize:16, fontWeight:600, cursor:"pointer" },
+  voiceBtn: { width:"100%", marginTop:12, padding:"10px", borderRadius:10, border:"1px solid rgba(74,222,128,0.3)", background:"rgba(74,222,128,0.08)", color:"#86efac", fontSize:14, cursor:"pointer", fontFamily:"'Cabinet Grotesk',sans-serif", fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:8 },
   footer: { textAlign:"center", padding:"24px 0 8px", borderTop:"1px solid rgba(74,222,128,0.08)", marginTop:40, fontSize:11, color:"rgba(110,231,183,0.3)", letterSpacing:"0.04em" },
 };
 
