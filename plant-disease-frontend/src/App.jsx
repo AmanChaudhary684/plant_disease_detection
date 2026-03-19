@@ -7,6 +7,7 @@ import { DISEASE_NAME_TRANSLATIONS } from "./translations";
 import { CommunityReportButton } from "./CommunityReport";
 import { AuthProvider, useAuth } from "./AuthContext";
 import LoginPage from "./LoginPage";
+import { exportDiagnosisPDF } from "./PDFExport";
 
 // ── Weather Widget Component ───────────────────────────────────────────────
 function WeatherWidget({ disease }) {
@@ -620,6 +621,12 @@ function AppInner() {
                   <div style={S.disclaimer}>⚠️ {t("disclaimer_text")}</div>
 
                   <button style={S.scanAgainBtn} onClick={reset}>{t("scan_another")}</button>
+
+                  <button
+                    style={{ ...S.scanAgainBtn, marginTop: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.3)", color: "#93c5fd", width: "100%" }}
+                    onClick={() => exportDiagnosisPDF(result, preview, lang)}>
+                    📄 {lang === "hi" ? "PDF रिपोर्ट डाउनलोड करें" : "Download PDF Report"}
+                  </button>
 
                   <button
                     style={{ ...S.scanAgainBtn, marginTop: 8, background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.3)", color: "#a5b4fc" }}
