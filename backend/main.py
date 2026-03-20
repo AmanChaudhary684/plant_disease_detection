@@ -16,7 +16,10 @@ import timm
 from datetime import datetime
 from weather_service import get_weather, get_coordinates_from_city, calculate_disease_risk
 # ✅ FIX: Only community_outbreak_service — removed duplicate outbreak_service import
-from community_outbreak_service import record_outbreak, get_outbreak_summary, get_national_stats, get_recent_reports
+from community_outbreak_service import (
+    record_outbreak, get_outbreak_summary, get_national_stats,
+    get_recent_reports, get_weekly_outbreak_summary, get_timeseries_trend
+)
 
 app = FastAPI(
     title="🌿 Plant Disease Detection API v2.0",
@@ -64,6 +67,23 @@ async def get_community_stats():
 @app.get("/api/community/recent")
 async def get_recent_community_reports(limit: int = 20):
     return {"success": True, "data": get_recent_reports(limit=limit)}
+
+@app.get("/api/community/map/week")
+async def get_weekly_map(weeks_ago: int = 0):
+    """Get outbreak map for a specific week. weeks_ago=0 is current week."""
+    if weeks_ago < 0 or weeks_ago > 11:
+        weeks_ago = max(0, min(11, weeks_ago))
+    data = get_weekly_outbreak_summary(weeks_ago=weeks_ago)
+    return {"success": True, **data}
+ 
+ 
+@app.get("/api/community/map/timeseries")
+async def get_timeseries_map(weeks: int = 4):
+    """Get outbreak trend data for the last N weeks with trend arrows."""
+    if weeks < 2 or weeks > 12:
+        weeks = max(2, min(12, weeks))
+    data = get_timeseries_trend(num_weeks=weeks)
+    return {"success": True, **data}
 
 # ── Complete Disease Database with Dosage Information — All 38 Classes ────────
 # Replace the DISEASE_INFO dictionary in main.py with this content

@@ -285,6 +285,119 @@ def get_recent_reports(limit=20):
         for r in rows_sorted
     ]
 
+# ── ADD THIS FUNCTION to community_outbreak_service.py ────────────────────────
+# Place it after the get_recent_reports() function
+
+def get_weekly_outbreak_summary(weeks_ago: int = 0):
+    """
+    Returns outbreak summary for a specific week.
+    weeks_ago=0 → current week
+    weeks_ago=1 → last week
+    weeks_ago=2 → 2 weeks ago
+    weeks_ago=3 → 3 weeks ago
+    """
+    from datetime import timedelta
+
+    now   = datetime.now()
+    # Week starts on Monday
+    week_start = now - timedelta(days=now.weekday()) - timedelta(weeks=weeks_ago)
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_end   = week_start + timedelta(days=7)
+
+    rows = _get_all_reports()
+
+    # Filter reports to the selected week
+    week_rows = []
+    for r in rows:
+        try:
+            ts = datetime.fromisoformat(r["timestamp"])
+            if week_start <= ts < week_end:
+                week_rows.append(r)
+        except Exception:
+            continue
+
+    # Build summary same as get_outbreak_summary but for this week only
+    state_disease = defaultdict(lambda: defaultdict(int))
+    state_user    = defaultdict(int)
+
+    for r in week_rows:
+        s = r["state"]
+        if s not in INDIA_STATES:
+            continue
+        state_disease[s][r["disease"]] += 1
+        if r.get("source") == "user":
+            state_user[s] += 1
+
+    result = {}
+    for state, diseases in state_disease.items():
+        total = sum(diseases.values())
+        if total == 0:
+            continue
+        top3 = sorted(diseases.items(), key=lambda x: x[1], reverse=True)[:3]
+        if total >= 20:   sev = "Critical"
+        elif total >= 10: sev = "High"
+        elif total >= 4:  sev = "Moderate"
+        else:             sev = "Low"
+        info = INDIA_STATES[state]
+        result[state] = {
+            "state":         state,
+            "abbr":          info["abbr"],
+            "lat":           info["lat"],
+            "lon":           info["lon"],
+            "total_reports": total,
+            "user_reports":  state_user[state],
+            "severity":      sev,
+            "top_disease":   top3[0][0].replace("___", " — ").replace("_", " "),
+            "top_count":     top3[0][1],
+            "top_diseases":  [
+                {"name": d[0].replace("___", " — ").replace("_", " "), "count": d[1]}
+                for d in top3
+            ],
+        }
+
+    return {
+        "week_label": "This Week" if weeks_ago == 0 else f"{weeks_ago} Week{'s' if weeks_ago > 1 else ''} Ago",
+        "week_start": week_start.strftime("%d %b %Y"),
+        "week_end":   (week_end - timedelta(days=1)).strftime("%d %b %Y"),
+        "total_reports": len(week_rows),
+        "states_affected": len(result),
+        "data": result,
+    }
+
+
+def get_timeseries_trend(num_weeks: int = 4):
+    """
+    Returns outbreak data for the last N weeks + trend comparison.
+    Used for the time-series map feature.
+    """
+    weeks = []
+    for i in range(num_weeks - 1, -1, -1):
+        week_data = get_weekly_outbreak_summary(weeks_ago=i)
+        weeks.append(week_data)
+
+    # Calculate trend per state: compare current week vs previous week
+    trends = {}
+    if len(weeks) >= 2:
+        current_week  = weeks[-1]["data"]
+        previous_week = weeks[-2]["data"]
+        all_states    = set(list(current_week.keys()) + list(previous_week.keys()))
+
+        for state in all_states:
+            curr  = current_week.get(state, {}).get("total_reports", 0)
+            prev  = previous_week.get(state, {}).get("total_reports", 0)
+            if curr > prev:
+                trends[state] = {"direction": "up",   "change": curr - prev, "symbol": "↑"}
+            elif curr < prev:
+                trends[state] = {"direction": "down", "change": prev - curr, "symbol": "↓"}
+            else:
+                trends[state] = {"direction": "same", "change": 0,           "symbol": "→"}
+
+    return {
+        "weeks":  weeks,
+        "trends": trends,
+        "num_weeks": num_weeks,
+    }
+
 
 try:
     _init_db()

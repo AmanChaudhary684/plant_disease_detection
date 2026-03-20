@@ -1,11 +1,11 @@
-// OutbreakMap.jsx — Disease Outbreak Map for India
+// OutbreakMap.jsx — Disease Outbreak Map for India with Time-Series
 // DTI Project | LeafDoc AI | Innovation #3
-// Add this file to src/ folder, then import it in App.jsx
+// Updated: Week-by-week time-series filter + trend arrows
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { LiveFeedTicker, CommunityStatsBar } from "./CommunityReport";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const STATE_PATHS = {
   "Jammu & Kashmir":  "M 165 30 L 210 25 L 235 45 L 220 70 L 195 75 L 170 60 Z",
@@ -34,30 +34,42 @@ const STATE_PATHS = {
 };
 
 const SEVERITY_COLORS = {
-  Critical: { fill: "rgba(239,68,68,0.75)",  stroke: "#ef4444", glow: "#ef4444", label: "Critical" },
-  High:     { fill: "rgba(249,115,22,0.65)", stroke: "#f97316", glow: "#f97316", label: "High" },
-  Moderate: { fill: "rgba(234,179,8,0.55)",  stroke: "#eab308", glow: "#eab308", label: "Moderate" },
-  Low:      { fill: "rgba(34,197,94,0.45)",  stroke: "#22c55e", glow: "#22c55e", label: "Low" },
+  Critical: { fill: "rgba(239,68,68,0.75)",   stroke: "#ef4444", glow: "#ef4444", label: "Critical" },
+  High:     { fill: "rgba(249,115,22,0.65)",  stroke: "#f97316", glow: "#f97316", label: "High" },
+  Moderate: { fill: "rgba(234,179,8,0.55)",   stroke: "#eab308", glow: "#eab308", label: "Moderate" },
+  Low:      { fill: "rgba(34,197,94,0.45)",   stroke: "#22c55e", glow: "#22c55e", label: "Low" },
   None:     { fill: "rgba(255,255,255,0.05)", stroke: "rgba(255,255,255,0.1)", glow: "transparent", label: "No Data" },
 };
 
-export default function OutbreakMap() {
-  const [outbreaks, setOutbreaks]         = useState(null);
-  const [stats, setStats]                 = useState(null);
-  const [loading, setLoading]             = useState(true);
-  const [hoveredState, setHoveredState]   = useState(null);
-  const [selectedState, setSelectedState] = useState(null);
-  const [filter, setFilter]               = useState("All");
+const TREND_CONFIG = {
+  up:   { symbol: "↑", color: "#ef4444", label: "Worsening" },
+  down: { symbol: "↓", color: "#22c55e", label: "Improving" },
+  same: { symbol: "→", color: "#6b7280", label: "Stable" },
+};
 
-  // ✅ FIX 1: Changed endpoint from /api/outbreaks to /api/community/map
-  //           and updated data.data / data.total_states to match new response shape
+export default function OutbreakMap() {
+  const [outbreaks, setOutbreaks]           = useState(null);
+  const [stats, setStats]                   = useState(null);
+  const [loading, setLoading]               = useState(true);
+  const [hoveredState, setHoveredState]     = useState(null);
+  const [selectedState, setSelectedState]   = useState(null);
+  const [filter, setFilter]                 = useState("All");
+
+  // ── Time-series state ──────────────────────────────────────────────────────
+  const [timeMode, setTimeMode]             = useState("all");   // "all" | "week"
+  const [weeksAgo, setWeeksAgo]             = useState(0);       // 0=this week, 1=last week...
+  const [weekMeta, setWeekMeta]             = useState(null);    // {week_label, week_start, week_end, total_reports}
+  const [trends, setTrends]                 = useState({});      // trend per state
+  const [weeklyLoading, setWeeklyLoading]   = useState(false);
+  const [allWeeksSummary, setAllWeeksSummary] = useState(null);  // chart data
+
+  // ── Load all-time data ─────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`${API_BASE}/api/community/map`)
       .then(r => r.json())
       .then(data => {
         if (data.success) {
           setOutbreaks(data.data);
-          // Fetch national stats separately from /api/community/stats
           return fetch(`${API_BASE}/api/community/stats`);
         }
       })
@@ -67,7 +79,60 @@ export default function OutbreakMap() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Load trend data (4 weeks)
+    fetch(`${API_BASE}/api/community/map/timeseries?weeks=4`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setTrends(data.trends || {});
+          setAllWeeksSummary(data.weeks || []);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  // ── Load weekly data when week mode is active ──────────────────────────────
+  const loadWeekData = useCallback((wAgo) => {
+    setWeeklyLoading(true);
+    fetch(`${API_BASE}/api/community/map/week?weeks_ago=${wAgo}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setOutbreaks(data.data);
+          setWeekMeta({
+            week_label:    data.week_label,
+            week_start:    data.week_start,
+            week_end:      data.week_end,
+            total_reports: data.total_reports,
+            states_affected: data.states_affected,
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setWeeklyLoading(false));
+  }, []);
+
+  const handleTimeModeSwitch = (mode) => {
+    setTimeMode(mode);
+    setSelectedState(null);
+    if (mode === "all") {
+      setLoading(true);
+      fetch(`${API_BASE}/api/community/map`)
+        .then(r => r.json())
+        .then(data => { if (data.success) setOutbreaks(data.data); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+      setWeekMeta(null);
+    } else {
+      loadWeekData(weeksAgo);
+    }
+  };
+
+  const handleWeekChange = (wAgo) => {
+    setWeeksAgo(wAgo);
+    loadWeekData(wAgo);
+  };
 
   const getStateSeverity = (stateName) => {
     if (!outbreaks || !outbreaks[stateName]) return "None";
@@ -90,7 +155,8 @@ export default function OutbreakMap() {
 
   return (
     <div style={M.root}>
-      {/* ── Header ── */}
+
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <div style={M.header}>
         <div style={M.headerLeft}>
           <div style={M.headerIcon}>🗺️</div>
@@ -114,15 +180,103 @@ export default function OutbreakMap() {
         )}
       </div>
 
-      {loading ? (
+      {/* ── Time-Series Controls ──────────────────────────────────────────── */}
+      <div style={M.timeSeriesBar}>
+        {/* Mode toggle */}
+        <div style={M.modeToggle}>
+          <button
+            style={{...M.modeBtn, ...(timeMode === "all" ? M.modeBtnActive : {})}}
+            onClick={() => handleTimeModeSwitch("all")}>
+            📊 All Time
+          </button>
+          <button
+            style={{...M.modeBtn, ...(timeMode === "week" ? M.modeBtnActive : {})}}
+            onClick={() => handleTimeModeSwitch("week")}>
+            📅 By Week
+          </button>
+        </div>
+
+        {/* Week selector — only visible in week mode */}
+        {timeMode === "week" && (
+          <div style={M.weekSelector}>
+            {[
+              { label: "This Week", wAgo: 0 },
+              { label: "1 Week Ago", wAgo: 1 },
+              { label: "2 Weeks Ago", wAgo: 2 },
+              { label: "3 Weeks Ago", wAgo: 3 },
+            ].map(({ label, wAgo }) => (
+              <button
+                key={wAgo}
+                style={{...M.weekBtn, ...(weeksAgo === wAgo ? M.weekBtnActive : {})}}
+                onClick={() => handleWeekChange(wAgo)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Week meta info */}
+        {timeMode === "week" && weekMeta && (
+          <div style={M.weekInfo}>
+            <span style={M.weekInfoLabel}>{weekMeta.week_label}</span>
+            <span style={M.weekInfoDate}>{weekMeta.week_start} – {weekMeta.week_end}</span>
+            <span style={M.weekInfoReports}>{weekMeta.total_reports} reports · {weekMeta.states_affected} states</span>
+          </div>
+        )}
+
+        {/* Trend legend — only in all-time mode */}
+        {timeMode === "all" && Object.keys(trends).length > 0 && (
+          <div style={M.trendLegend}>
+            <span style={M.trendLegendLabel}>vs last week:</span>
+            {Object.entries(TREND_CONFIG).map(([key, cfg]) => (
+              <div key={key} style={M.trendLegendItem}>
+                <span style={{...M.trendSymbol, color: cfg.color}}>{cfg.symbol}</span>
+                <span style={M.trendLegendText}>{cfg.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Mini weekly chart ─────────────────────────────────────────────── */}
+      {timeMode === "all" && allWeeksSummary?.length > 0 && (
+        <div style={M.weekChart}>
+          <div style={M.weekChartTitle}>📈 Weekly Report Trend (Last 4 Weeks)</div>
+          <div style={M.weekChartBars}>
+            {allWeeksSummary.map((week, i) => {
+              const maxVal = Math.max(...allWeeksSummary.map(w => w.total_reports), 1);
+              const pct    = Math.max(8, (week.total_reports / maxVal) * 100);
+              const isLast = i === allWeeksSummary.length - 1;
+              return (
+                <div key={i} style={M.weekChartBar}>
+                  <div style={M.weekChartBarCount}>{week.total_reports}</div>
+                  <div style={{
+                    ...M.weekChartBarFill,
+                    height: `${pct}%`,
+                    background: isLast
+                      ? "linear-gradient(to top, #16a34a, #4ade80)"
+                      : "linear-gradient(to top, rgba(74,222,128,0.3), rgba(74,222,128,0.5))",
+                    border: isLast ? "1px solid #4ade80" : "1px solid rgba(74,222,128,0.2)",
+                  }} />
+                  <div style={M.weekChartBarLabel}>{week.week_label}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {loading || weeklyLoading ? (
         <div style={M.loadingBox}>
           <div style={M.loadingSpinner} />
-          <span style={{color:"#6ee7b7",fontSize:14}}>Loading outbreak data...</span>
+          <span style={{color:"#6ee7b7", fontSize:14}}>
+            {weeklyLoading ? "Loading week data..." : "Loading outbreak data..."}
+          </span>
         </div>
       ) : (
         <div style={M.body}>
 
-          {/* ── LEFT: Map ── */}
+          {/* ── LEFT: Map ──────────────────────────────────────────────────── */}
           <div style={M.mapCol}>
 
             {/* Filter tabs */}
@@ -137,7 +291,6 @@ export default function OutbreakMap() {
               ))}
             </div>
 
-            {/* ✅ FIX 2: lang is not a prop here — hardcode "en" to avoid undefined error */}
             <LiveFeedTicker lang="en" />
             <CommunityStatsBar lang="en" />
 
@@ -181,6 +334,7 @@ export default function OutbreakMap() {
                   );
                 })}
 
+                {/* State abbreviation labels */}
                 {outbreaks && Object.entries(outbreaks).slice(0, 12).map(([stateName, data]) => {
                   const svgX = (data.lon - 68) * 5.2 + 65;
                   const svgY = (38 - data.lat) * 5.8 + 28;
@@ -189,6 +343,29 @@ export default function OutbreakMap() {
                       style={{fontSize:6, fill:"rgba(255,255,255,0.7)", fontFamily:"sans-serif",
                               fontWeight:"bold", pointerEvents:"none", textAnchor:"middle"}}>
                       {data.abbr}
+                    </text>
+                  );
+                })}
+
+                {/* Trend arrows overlay — only in all-time mode */}
+                {timeMode === "all" && outbreaks && Object.entries(outbreaks).map(([stateName, data]) => {
+                  const trend = trends[stateName];
+                  if (!trend || trend.direction === "same") return null;
+                  const svgX = (data.lon - 68) * 5.2 + 65;
+                  const svgY = (38 - data.lat) * 5.8 + 33;
+                  const tCfg = TREND_CONFIG[trend.direction];
+                  return (
+                    <text key={`trend-${stateName}`} x={svgX} y={svgY}
+                      style={{
+                        fontSize: 8,
+                        fill: tCfg.color,
+                        fontFamily: "sans-serif",
+                        fontWeight: "bold",
+                        pointerEvents: "none",
+                        textAnchor: "middle",
+                        opacity: 0.9,
+                      }}>
+                      {tCfg.symbol}
                     </text>
                   );
                 })}
@@ -201,16 +378,44 @@ export default function OutbreakMap() {
                     <span style={M.legendLabel}>{c.label}</span>
                   </div>
                 ))}
+                {timeMode === "all" && Object.keys(trends).length > 0 && (
+                  <>
+                    <div style={{...M.legendItem, marginTop:6, paddingTop:6, borderTop:"1px solid rgba(74,222,128,0.15)"}}>
+                      <span style={{fontSize:10, color:"#ef4444", fontWeight:700}}>↑</span>
+                      <span style={M.legendLabel}>Worsening</span>
+                    </div>
+                    <div style={M.legendItem}>
+                      <span style={{fontSize:10, color:"#22c55e", fontWeight:700}}>↓</span>
+                      <span style={M.legendLabel}>Improving</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
+            {/* State detail card */}
             {activeState && (
               <div style={M.stateCard}>
                 {activeData ? (
                   <>
                     <div style={M.stateCardHeader}>
                       <div>
-                        <div style={M.stateCardName}>{activeState}</div>
+                        <div style={M.stateCardName}>
+                          {activeState}
+                          {/* Trend badge */}
+                          {timeMode === "all" && trends[activeState] && trends[activeState].direction !== "same" && (
+                            <span style={{
+                              marginLeft: 8,
+                              fontSize: 12,
+                              color: TREND_CONFIG[trends[activeState].direction].color,
+                              fontWeight: 700,
+                            }}>
+                              {TREND_CONFIG[trends[activeState].direction].symbol}
+                              {" "}
+                              {trends[activeState].change} vs last week
+                            </span>
+                          )}
+                        </div>
                         <div style={{
                           ...M.stateCardBadge,
                           background: SEVERITY_COLORS[activeData.severity]?.fill,
@@ -218,6 +423,7 @@ export default function OutbreakMap() {
                           color: SEVERITY_COLORS[activeData.severity]?.stroke,
                         }}>
                           {activeData.severity} Outbreak Risk
+                          {timeMode === "week" && weekMeta && ` · ${weekMeta.week_label}`}
                         </div>
                       </div>
                       <div style={M.stateCardTotal}>
@@ -238,14 +444,15 @@ export default function OutbreakMap() {
                   </>
                 ) : (
                   <div style={{color:"#6ee7b7", fontSize:13, padding:"8px 0"}}>
-                    No disease reports recorded for {activeState} yet.
+                    No disease reports for {activeState}
+                    {timeMode === "week" && weekMeta ? ` during ${weekMeta.week_label}.` : " yet."}
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* ── RIGHT: Sidebar ── */}
+          {/* ── RIGHT: Sidebar ─────────────────────────────────────────────── */}
           <div style={M.sidebar}>
             {stats?.top_diseases?.length > 0 && (
               <div style={M.sideCard}>
@@ -260,7 +467,7 @@ export default function OutbreakMap() {
                         <span style={M.nationalCount}>{d.count}</span>
                       </div>
                       <div style={M.nationalBar}>
-                        <div style={{...M.nationalBarFill, width: `${pct}%`}} />
+                        <div style={{...M.nationalBarFill, width:`${pct}%`}} />
                       </div>
                     </div>
                   );
@@ -272,18 +479,32 @@ export default function OutbreakMap() {
               <div style={M.sideCardTitle}>📍 States by Outbreak Level</div>
               <div style={M.stateList}>
                 {stateList.length === 0 ? (
-                  <div style={{color:"#6ee7b7",fontSize:12,textAlign:"center",padding:"12px 0"}}>
+                  <div style={{color:"#6ee7b7", fontSize:12, textAlign:"center", padding:"12px 0"}}>
                     No states match this filter
                   </div>
                 ) : stateList.map((s) => {
-                  const col = SEVERITY_COLORS[s.severity] || SEVERITY_COLORS.None;
+                  const col   = SEVERITY_COLORS[s.severity] || SEVERITY_COLORS.None;
+                  const trend = trends[s.state];
                   return (
                     <div key={s.state}
                       style={{...M.stateListItem, ...(selectedState === s.state ? M.stateListItemActive : {})}}
                       onClick={() => setSelectedState(prev => prev === s.state ? null : s.state)}>
                       <div style={{...M.stateListDot, background: col.stroke}} />
                       <div style={M.stateListInfo}>
-                        <div style={M.stateListName}>{s.state}</div>
+                        <div style={M.stateListName}>
+                          {s.state}
+                          {/* Inline trend arrow */}
+                          {timeMode === "all" && trend && trend.direction !== "same" && (
+                            <span style={{
+                              marginLeft: 5,
+                              fontSize: 11,
+                              color: TREND_CONFIG[trend.direction].color,
+                              fontWeight: 700,
+                            }}>
+                              {TREND_CONFIG[trend.direction].symbol}
+                            </span>
+                          )}
+                        </div>
                         <div style={M.stateListDisease}>{s.top_disease}</div>
                       </div>
                       <div style={{...M.stateListCount, color: col.stroke}}>{s.total_reports}</div>
@@ -305,7 +526,7 @@ export default function OutbreakMap() {
 
 const M = {
   root: { fontFamily:"'Cabinet Grotesk',sans-serif", color:"#e2f5e6", paddingBottom:40 },
-  header: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24, flexWrap:"wrap", gap:12 },
+  header: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:12 },
   headerLeft: { display:"flex", alignItems:"center", gap:14 },
   headerIcon: { width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#166534,#15803d)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, boxShadow:"0 0 20px rgba(22,163,74,0.4)" },
   headerTitle: { fontFamily:"'Clash Display',sans-serif", fontSize:22, fontWeight:700, color:"#f0fdf4" },
@@ -315,6 +536,34 @@ const M = {
   headerStatVal: { fontFamily:"'Clash Display',sans-serif", fontSize:24, fontWeight:800, color:"#4ade80" },
   headerStatLabel: { fontSize:11, color:"#6ee7b7", fontWeight:500 },
   headerStatDiv: { width:1, height:32, background:"rgba(74,222,128,0.2)" },
+
+  // ── Time-series controls ───────────────────────────────────────────────────
+  timeSeriesBar: { display:"flex", alignItems:"center", gap:12, marginBottom:16, flexWrap:"wrap", background:"rgba(10,40,18,0.5)", border:"1px solid rgba(74,222,128,0.15)", borderRadius:14, padding:"12px 16px" },
+  modeToggle: { display:"flex", gap:6 },
+  modeBtn: { padding:"7px 16px", borderRadius:10, border:"1px solid rgba(74,222,128,0.2)", background:"transparent", color:"#6ee7b7", fontSize:12, cursor:"pointer", fontFamily:"'Cabinet Grotesk',sans-serif", fontWeight:500 },
+  modeBtnActive: { background:"rgba(74,222,128,0.18)", border:"1px solid rgba(74,222,128,0.45)", color:"#bbf7d0", fontWeight:700 },
+  weekSelector: { display:"flex", gap:6, flexWrap:"wrap" },
+  weekBtn: { padding:"5px 12px", borderRadius:8, border:"1px solid rgba(74,222,128,0.15)", background:"transparent", color:"#6ee7b7", fontSize:11, cursor:"pointer", fontFamily:"'Cabinet Grotesk',sans-serif" },
+  weekBtnActive: { background:"rgba(74,222,128,0.2)", border:"1px solid rgba(74,222,128,0.4)", color:"#bbf7d0", fontWeight:700 },
+  weekInfo: { display:"flex", flexDirection:"column", gap:2 },
+  weekInfoLabel: { fontSize:13, fontWeight:700, color:"#4ade80" },
+  weekInfoDate: { fontSize:11, color:"#6ee7b7" },
+  weekInfoReports: { fontSize:11, color:"#4b7a57" },
+  trendLegend: { display:"flex", alignItems:"center", gap:10, marginLeft:"auto" },
+  trendLegendLabel: { fontSize:11, color:"#4b7a57", fontWeight:600 },
+  trendLegendItem: { display:"flex", alignItems:"center", gap:3 },
+  trendSymbol: { fontSize:13, fontWeight:800 },
+  trendLegendText: { fontSize:11, color:"#6ee7b7" },
+
+  // ── Weekly chart ────────────────────────────────────────────────────────────
+  weekChart: { background:"rgba(10,40,18,0.5)", border:"1px solid rgba(74,222,128,0.12)", borderRadius:14, padding:"14px 16px", marginBottom:16 },
+  weekChartTitle: { fontSize:12, fontWeight:700, color:"#86efac", marginBottom:10 },
+  weekChartBars: { display:"flex", alignItems:"flex-end", gap:8, height:70 },
+  weekChartBar: { flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, height:"100%" },
+  weekChartBarCount: { fontSize:10, color:"#4ade80", fontWeight:700 },
+  weekChartBarFill: { width:"100%", borderRadius:"4px 4px 0 0", minHeight:8, transition:"height 0.5s ease" },
+  weekChartBarLabel: { fontSize:9, color:"#6ee7b7", textAlign:"center", lineHeight:1.3 },
+
   loadingBox: { display:"flex", alignItems:"center", justifyContent:"center", gap:12, padding:"80px 0" },
   loadingSpinner: { width:24, height:24, borderRadius:"50%", border:"2px solid rgba(74,222,128,0.3)", borderTopColor:"#4ade80", animation:"spin 0.8s linear infinite" },
   body: { display:"grid", gridTemplateColumns:"1fr 320px", gap:20, alignItems:"start" },
@@ -329,7 +578,7 @@ const M = {
   legendItem: { display:"flex", alignItems:"center", gap:8 },
   legendDot: { width:10, height:10, borderRadius:"50%", flexShrink:0 },
   legendLabel: { fontSize:11, color:"#a7f3d0", fontWeight:500 },
-  stateCard: { background:"rgba(10,40,18,0.7)", border:"1px solid rgba(74,222,128,0.2)", borderRadius:16, padding:"18px", backdropFilter:"blur(16px)", animation:"fadeUp 0.25s ease forwards" },
+  stateCard: { background:"rgba(10,40,18,0.7)", border:"1px solid rgba(74,222,128,0.2)", borderRadius:16, padding:"18px", backdropFilter:"blur(16px)" },
   stateCardHeader: { display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 },
   stateCardName: { fontFamily:"'Clash Display',sans-serif", fontSize:18, fontWeight:700, color:"#f0fdf4", marginBottom:6 },
   stateCardBadge: { display:"inline-block", borderRadius:20, padding:"3px 12px", fontSize:12, fontWeight:700 },
