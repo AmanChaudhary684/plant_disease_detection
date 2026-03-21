@@ -210,6 +210,9 @@ function AppInner() {
   const [showAddToPlant, setShowAddToPlant]     = useState(false);
   const fileRef = useRef();
   const { t, lang } = useLang();
+  const [gradcam, setGradcam]             = useState(null);   // gradcam result
+  const [showGradcam, setShowGradcam]     = useState(false);  // toggle overlay
+  const [gradcamLoading, setGradcamLoading] = useState(false);
 
   const translateDisease = (name) => {
     if (lang === "en") return name;
@@ -266,6 +269,29 @@ function AppInner() {
     } finally { setLoading(false); }
   };
 
+  const fetchGradcam = async () => {
+    if (!file || !result) return;
+    setGradcamLoading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res  = await fetch(`${API_BASE}/api/detect/gradcam`, { method: "POST", body: form });
+      if (!res.ok) throw new Error("Grad-CAM request failed");
+      const data = await res.json();
+      if (data.gradcam?.available) {
+        setGradcam(data.gradcam);
+        setShowGradcam(true);
+      } else {
+        alert("Grad-CAM not available for this image.");
+      }
+    } catch (e) {
+      console.error("Grad-CAM error:", e);
+      alert("Could not generate heatmap. Please try again.");
+    } finally {
+      setGradcamLoading(false);
+    }
+  };
+
   const handleOfflineResult = (offlineResult) => {
     const topClass  = offlineResult.diagnosis.top_prediction.class_id;
     const isHealthy = offlineResult.diagnosis.is_healthy;
@@ -296,6 +322,7 @@ function AppInner() {
     setScreen("home"); setPreview(null); setFile(null);
     setResult(null); setError(null); setActiveTab("organic");
     setIsOfflineResult(false); setShowOffline(false);
+    setGradcam(null); setShowGradcam(false);
   };
 
   // ── Auth gate: show login if not signed in ──
@@ -519,14 +546,56 @@ function AppInner() {
                 {/* LEFT */}
                 <div style={S.resultLeft}>
                   <div style={S.leafCard}>
-                    <img src={preview} alt="leaf" style={S.leafImg} />
-                    <div style={S.leafCardOverlay}>
-                      <span style={S.leafCardLabel}>
-                        {result.diagnosis.is_healthy
-                          ? (lang === "hi" ? "✅ स्वस्थ पौधा" : "✅ Healthy Plant")
-                          : (lang === "hi" ? "🔬 रोग पाया गया" : "🔬 Disease Detected")}
-                      </span>
-                    </div>
+                    {/* Show heatmap overlay or original image */}
+                    <img
+                      src={showGradcam && gradcam?.overlay_image ? gradcam.overlay_image : preview}
+                      alt="leaf"
+                      style={S.leafImg}
+                    />
+                      <div style={S.leafCardOverlay}>
+                        <span style={S.leafCardLabel}>
+                          {result.diagnosis.is_healthy
+                            ? (lang === "hi" ? "✅ स्वस्थ पौधा" : "✅ Healthy Plant")
+                            : (lang === "hi" ? "🔬 रोग पाया गया" : "🔬 Disease Detected")}
+                        </span>
+                      </div>
+                      {/* Grad-CAM toggle button */}
+                      {!result.diagnosis.is_healthy && (
+                        <div style={GC.btnRow}>
+                          {!gradcam ? (
+                            <button
+                              style={GC.gradcamBtn}
+                              onClick={fetchGradcam}
+                              disabled={gradcamLoading}>
+                              {gradcamLoading
+                                ? <><span style={S.btnSpinner} /> Analyzing...</>
+                                : "🔥 Show AI Heatmap"}
+                            </button>
+                          ) : (
+                            <button
+                              style={{
+                                ...GC.gradcamBtn,
+                                background: showGradcam
+                                  ? "rgba(239,68,68,0.2)"
+                                  : "rgba(74,222,128,0.12)",
+                                border: showGradcam
+                                  ? "1px solid rgba(239,68,68,0.4)"
+                                  : "1px solid rgba(74,222,128,0.3)",
+                                color: showGradcam ? "#f87171" : "#86efac",
+                              }}
+                              onClick={() => setShowGradcam(v => !v)}>
+                              {showGradcam ? "🖼️ Show Original" : "🔥 Show AI Heatmap"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+ 
+                      {/* Grad-CAM description */}
+                      {showGradcam && gradcam && (
+                        <div style={GC.descBox}>
+                          🔴 Red/yellow = disease focus area &nbsp;·&nbsp; 🔵 Blue = less relevant
+                        </div>
+                      )}
                   </div>
 
                   <div style={S.diagCard}>
@@ -807,6 +876,45 @@ const S = {
   scanAgainBtn: { width:"100%", padding:"15px", borderRadius:14, border:"1px solid rgba(74,222,128,0.3)", background:"rgba(74,222,128,0.08)", color:"#86efac", fontFamily:"'Clash Display',sans-serif", fontSize:16, fontWeight:600, cursor:"pointer" },
   voiceBtn: { width:"100%", marginTop:12, padding:"10px", borderRadius:10, border:"1px solid rgba(74,222,128,0.3)", background:"rgba(74,222,128,0.08)", color:"#86efac", fontSize:14, cursor:"pointer", fontFamily:"'Cabinet Grotesk',sans-serif", fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:8 },
   footer: { textAlign:"center", padding:"24px 0 8px", borderTop:"1px solid rgba(74,222,128,0.08)", marginTop:40, fontSize:11, color:"rgba(110,231,183,0.3)", letterSpacing:"0.04em" },
+};
+
+const GC = {
+  btnRow: {
+    position: "absolute",
+    bottom: 52,
+    left: 0,
+    right: 0,
+    display: "flex",
+    justifyContent: "center",
+    padding: "0 12px",
+  },
+  gradcamBtn: {
+    background: "rgba(74,222,128,0.12)",
+    border: "1px solid rgba(74,222,128,0.3)",
+    color: "#86efac",
+    borderRadius: 10,
+    padding: "7px 16px",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "'Cabinet Grotesk',sans-serif",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    backdropFilter: "blur(10px)",
+    transition: "all 0.2s ease",
+  },
+  descBox: {
+    position: "absolute",
+    bottom: 10,
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    fontSize: 10,
+    color: "rgba(255,255,255,0.75)",
+    fontWeight: 500,
+    letterSpacing: "0.02em",
+  },
 };
 
 export default function App() {
