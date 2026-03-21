@@ -8,6 +8,7 @@ import { CommunityReportButton } from "./CommunityReport";
 import { AuthProvider, useAuth } from "./AuthContext";
 import LoginPage from "./LoginPage";
 import { exportDiagnosisPDF } from "./PDFExport";
+import CropCalendar from "./CropCalendar";
 
 // ── Weather Widget Component ───────────────────────────────────────────────
 function WeatherWidget({ disease }) {
@@ -715,6 +716,11 @@ function AppInner() {
                   </div>
 
                   <WeatherWidget disease={result.diagnosis.top_prediction.class_id} />
+
+                  <CropCalendar
+                    diseaseClassId={result.diagnosis.top_prediction.class_id}
+                    lang={lang}
+                  />
 
                   <div style={S.disclaimer}>⚠️ {t("disclaimer_text")}</div>
 
