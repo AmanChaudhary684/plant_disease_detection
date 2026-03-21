@@ -335,7 +335,7 @@ function AppInner() {
             </div>
           </div>
           <div style={S.headerRight}>
-            <div style={S.modelBadge}><span style={S.modelDot} />EfficientNet-B3 · 99.74% Lab | 60.85% Real-World</div>
+            <div style={S.modelBadge}><span style={S.modelDot} />SWIN Transformer · 73.19% Real-World Accuracy</div>
             <button style={{ ...S.historyBtn, ...(showHistory ? S.historyBtnActive : {}) }}
               onClick={() => setShowHistory(!showHistory)}>
               🕐 {t("history")} {history.length > 0 && <span style={S.historyCount}>{history.length}</span>}
