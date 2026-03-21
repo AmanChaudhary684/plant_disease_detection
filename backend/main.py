@@ -4,6 +4,8 @@ DTI Project | 38 Disease Classes | SWIN Transformer
 Run: uvicorn main:app --reload --port 8000
 """
 
+import base64
+from fastapi.responses import JSONResponse
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import torch
@@ -540,6 +542,243 @@ async def get_weather_risk(lat: float = None, lon: float = None, city: str = Non
         return {"success": False, "message": "Weather data unavailable", "weather": None, "disease_risk": None}
     risk = calculate_disease_risk(weather, disease)
     return {"success": True, "location": {"lat": lat, "lon": lon, "city": city or ""}, "disease": disease, "weather": weather, "disease_risk": risk}
+
+def generate_gradcam(model, img_tensor, device, class_idx=None):
+    """
+    Generate Grad-CAM heatmap for SWIN Transformer.
+    Works with both SWIN and EfficientNet-B3.
+    Returns heatmap as numpy array (224x224, values 0-1).
+    """
+    model.eval()
+    img_tensor = img_tensor.to(device)
+    img_tensor.requires_grad_(False)
+ 
+    gradients = []
+    activations = []
+ 
+    # ── Hook functions ─────────────────────────────────────────────────────────
+    def save_gradient(grad):
+        gradients.append(grad)
+ 
+    def save_activation(module, input, output):
+        activations.append(output)
+        output.register_hook(save_gradient)
+ 
+    # ── Find the last feature layer ────────────────────────────────────────────
+    # For SWIN: hook into the last layer of base model
+    # For EfficientNet: hook into last conv block
+    hook_handle = None
+ 
+    try:
+        # Try SWIN architecture first
+        if hasattr(model, 'base') and hasattr(model.base, 'layers'):
+            # SWIN Transformer — hook last layer norm
+            target_layer = model.base.layers[-1]
+            hook_handle   = target_layer.register_forward_hook(save_activation)
+        elif hasattr(model, 'blocks'):
+            # EfficientNet-B3 direct
+            target_layer = model.blocks[-1]
+            hook_handle   = target_layer.register_forward_hook(save_activation)
+        else:
+            # Generic fallback
+            layers = list(model.children())
+            target_layer = layers[-2] if len(layers) > 1 else layers[-1]
+            hook_handle   = target_layer.register_forward_hook(save_activation)
+    except Exception:
+        return None
+ 
+    # ── Forward pass ───────────────────────────────────────────────────────────
+    img_tensor.requires_grad_(True)
+    try:
+        output = model(img_tensor)
+    except Exception:
+        if hook_handle: hook_handle.remove()
+        return None
+ 
+    if hook_handle:
+        hook_handle.remove()
+ 
+    if not activations:
+        return None
+ 
+    # ── Get target class ───────────────────────────────────────────────────────
+    if class_idx is None:
+        class_idx = output.argmax(dim=1).item()
+ 
+    # ── Backward pass for gradients ────────────────────────────────────────────
+    model.zero_grad()
+    score = output[0, class_idx]
+    score.backward()
+ 
+    if not gradients:
+        return None
+ 
+    # ── Compute Grad-CAM ───────────────────────────────────────────────────────
+    grad   = gradients[0].detach().cpu()   # shape varies by model
+    activ  = activations[0].detach().cpu()
+ 
+    # Handle SWIN output shape: [B, H*W, C] or [B, C, H, W]
+    if grad.dim() == 3:
+        # SWIN: [B, seq_len, channels] → reshape to spatial
+        B, seq_len, C = grad.shape
+        H = W = int(seq_len ** 0.5)
+        if H * W != seq_len:
+            # Not square — use global average
+            weights = grad.mean(dim=1)        # [B, C]
+            cam     = (weights.unsqueeze(1) * activ).sum(dim=2)  # [B, seq_len]
+            cam     = cam[0].reshape(int(seq_len**0.5), -1)
+        else:
+            grad_reshaped  = grad[0].reshape(H, W, C).permute(2, 0, 1)   # [C, H, W]
+            activ_reshaped = activ[0].reshape(H, W, C).permute(2, 0, 1)  # [C, H, W]
+            weights = grad_reshaped.mean(dim=(1, 2))   # [C]
+            cam     = (weights[:, None, None] * activ_reshaped).sum(dim=0)  # [H, W]
+    elif grad.dim() == 4:
+        # Conv: [B, C, H, W]
+        weights = grad[0].mean(dim=(1, 2))    # [C]
+        cam     = (weights[:, None, None] * activ[0]).sum(dim=0)  # [H, W]
+    else:
+        return None
+ 
+    # ── Normalize heatmap ──────────────────────────────────────────────────────
+    cam = cam.numpy()
+    cam = np.maximum(cam, 0)   # ReLU
+    if cam.max() > 0:
+        cam = cam / cam.max()
+    else:
+        cam = np.zeros_like(cam)
+ 
+    # Resize to 224x224
+    import cv2
+    cam_resized = cv2.resize(cam.astype(np.float32), (224, 224))
+ 
+    return cam_resized
+ 
+ 
+def apply_colormap(heatmap, original_img_array, alpha=0.45):
+    """
+    Overlay heatmap on original image using jet colormap.
+    Returns blended image as numpy array (224x224x3, uint8).
+    """
+    import cv2
+ 
+    # Apply colormap (jet: blue=low, green=medium, red=high activation)
+    heatmap_uint8 = np.uint8(255 * heatmap)
+    colored_map   = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
+    colored_map   = cv2.cvtColor(colored_map, cv2.COLOR_BGR2RGB)
+ 
+    # Resize original image to 224x224
+    orig_resized = cv2.resize(original_img_array, (224, 224))
+ 
+    # Blend
+    blended = (alpha * colored_map + (1 - alpha) * orig_resized).astype(np.uint8)
+    return blended
+ 
+ 
+@app.post("/api/detect/gradcam")
+async def detect_with_gradcam(file: UploadFile = File(...)):
+    """
+    Disease detection + Grad-CAM heatmap visualization.
+    Returns diagnosis + base64 heatmap image.
+    """
+    if file.content_type not in ["image/jpeg", "image/png", "image/jpg", "image/webp"]:
+        raise HTTPException(status_code=400, detail="Invalid file type.")
+ 
+    try:
+        import cv2
+        contents = await file.read()
+        pil_img  = Image.open(io.BytesIO(contents)).convert("RGB")
+        img_array = np.array(pil_img)
+ 
+        if not model_state["loaded"] or not model_state["model"]:
+            raise HTTPException(status_code=503, detail="Model not loaded.")
+ 
+        # ── Standard detection ─────────────────────────────────────────────────
+        tensor = IMG_TRANSFORM(pil_img).unsqueeze(0).to(model_state["device"])
+ 
+        with torch.no_grad():
+            logits = model_state["model"](tensor)
+            probs  = torch.softmax(logits, dim=1)[0]
+ 
+        top_probs, top_idxs = probs.topk(5)
+        predictions = [
+            {
+                "class_id":       model_state["class_names"][idx.item()],
+                "display_name":   model_state["class_names"][idx.item()].replace("___", " — ").replace("_", " "),
+                "confidence":     round(prob.item() * 100, 2),
+                "confidence_raw": prob.item()
+            }
+            for prob, idx in zip(top_probs, top_idxs)
+        ]
+ 
+        top_class    = predictions[0]["class_id"]
+        top_class_idx = top_idxs[0].item()
+        disease_info = get_disease_info(top_class)
+        is_healthy   = "healthy" in top_class.lower()
+ 
+        # ── Grad-CAM ───────────────────────────────────────────────────────────
+        gradcam_b64   = None
+        heatmap_only_b64 = None
+ 
+        try:
+            # Need gradient-enabled tensor
+            tensor_grad = IMG_TRANSFORM(pil_img).unsqueeze(0)
+            heatmap = generate_gradcam(
+                model_state["model"], tensor_grad,
+                model_state["device"], class_idx=top_class_idx
+            )
+ 
+            if heatmap is not None:
+                # Overlay on original image
+                blended = apply_colormap(heatmap, img_array, alpha=0.45)
+ 
+                # Convert blended to base64
+                blended_pil = Image.fromarray(blended)
+                buf = io.BytesIO()
+                blended_pil.save(buf, format="JPEG", quality=90)
+                gradcam_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+ 
+                # Heatmap only (for separate display)
+                heatmap_uint8  = np.uint8(255 * heatmap)
+                import cv2 as cv2_inner
+                colored        = cv2_inner.applyColorMap(heatmap_uint8, cv2_inner.COLORMAP_JET)
+                colored_rgb    = cv2_inner.cvtColor(colored, cv2_inner.COLOR_BGR2RGB)
+                heatmap_pil    = Image.fromarray(colored_rgb)
+                buf2 = io.BytesIO()
+                heatmap_pil.save(buf2, format="JPEG", quality=85)
+                heatmap_only_b64 = "data:image/jpeg;base64," + base64.b64encode(buf2.getvalue()).decode()
+ 
+        except Exception as grad_err:
+            print(f"Grad-CAM generation failed: {grad_err}")
+            # Detection still works even if Grad-CAM fails
+ 
+        return {
+            "success": True,
+            "timestamp": datetime.now().isoformat(),
+            "image_info": {"filename": file.filename, "size_bytes": len(contents)},
+            "diagnosis": {
+                "top_prediction":    predictions[0],
+                "all_predictions":   predictions,
+                "is_healthy":        is_healthy,
+                "confidence_level":  (
+                    "High"   if predictions[0]["confidence"] > 80 else
+                    "Medium" if predictions[0]["confidence"] > 60 else
+                    "Low — consider expert consultation"
+                ),
+            },
+            "disease_info":    disease_info,
+            "gradcam": {
+                "available":      gradcam_b64 is not None,
+                "overlay_image":  gradcam_b64,        # original + heatmap blended
+                "heatmap_image":  heatmap_only_b64,   # pure heatmap
+                "description":    "Red/yellow areas show where the AI detected disease patterns. Blue areas are less relevant to the diagnosis.",
+            },
+            "disclaimer": "This is an AI-based preliminary diagnosis. For high-value crops, please consult a certified agricultural expert."
+        }
+ 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Detection failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
