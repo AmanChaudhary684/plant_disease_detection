@@ -292,6 +292,35 @@ function AppInner() {
     }
   };
 
+  const shareOnWhatsApp = (result, lang) => {
+    const disease  = result.diagnosis.top_prediction.display_name;
+    const conf     = result.diagnosis.top_prediction.confidence;
+    const sev      = result.disease_info.severity;
+    const treat    = result.disease_info.organic_treatment?.[0] || "";
+    const chemical = result.disease_info.chemical_treatment?.[0] || "";
+  
+    const msg = lang === "hi"
+      ? `🌿 *LeafDoc AI — पौधे की बीमारी रिपोर्ट*\n\n` +
+        `🔬 *निदान:* ${disease}\n` +
+        `🎯 *विश्वास स्तर:* ${conf}%\n` +
+        `⚠️ *गंभीरता:* ${sev}\n\n` +
+        `🌿 *जैविक उपचार:* ${treat}\n` +
+        `⚗️ *रासायनिक उपचार:* ${chemical}\n\n` +
+        `📱 LeafDoc AI द्वारा निदान — Bennett University DTI Project\n` +
+        `🔗 ${window.location.origin}`
+      : `🌿 *LeafDoc AI — Plant Disease Report*\n\n` +
+        `🔬 *Diagnosis:* ${disease}\n` +
+        `🎯 *Confidence:* ${conf}%\n` +
+        `⚠️ *Severity:* ${sev}\n\n` +
+        `🌿 *Organic Treatment:* ${treat}\n` +
+        `⚗️ *Chemical Treatment:* ${chemical}\n\n` +
+        `📱 Diagnosed by LeafDoc AI — Bennett University DTI Project\n` +
+        `🔗 ${window.location.origin}`;
+  
+    const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+  };
+
   const handleOfflineResult = (offlineResult) => {
     const topClass  = offlineResult.diagnosis.top_prediction.class_id;
     const isHealthy = offlineResult.diagnosis.is_healthy;
@@ -695,6 +724,18 @@ function AppInner() {
                     style={{ ...S.scanAgainBtn, marginTop: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.3)", color: "#93c5fd", width: "100%" }}
                     onClick={() => exportDiagnosisPDF(result, preview, lang)}>
                     📄 {lang === "hi" ? "PDF रिपोर्ट डाउनलोड करें" : "Download PDF Report"}
+                  </button>
+
+                  <button
+                    style={{
+                      ...S.scanAgainBtn,
+                      marginTop: 8,
+                      background: "rgba(37,211,102,0.08)",
+                      border: "1px solid rgba(37,211,102,0.3)",
+                      color: "#25d366",
+                    }}
+                    onClick={() => shareOnWhatsApp(result, lang)}>
+                    📱 {lang === "hi" ? "WhatsApp पर शेयर करें" : "Share on WhatsApp"}
                   </button>
 
                   <button
