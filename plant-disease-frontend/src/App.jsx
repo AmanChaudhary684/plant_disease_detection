@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import LoginPage from "./LoginPage";
 import { exportDiagnosisPDF } from "./PDFExport";
 import CropCalendar from "./CropCalendar";
+import DiseaseStages from "./DiseaseStages";
 
 // ── Weather Widget Component ───────────────────────────────────────────────
 function WeatherWidget({ disease }) {
@@ -718,6 +719,11 @@ function AppInner() {
                   <WeatherWidget disease={result.diagnosis.top_prediction.class_id} />
 
                   <CropCalendar
+                    diseaseClassId={result.diagnosis.top_prediction.class_id}
+                    lang={lang}
+                  />
+
+                  <DiseaseStages
                     diseaseClassId={result.diagnosis.top_prediction.class_id}
                     lang={lang}
                   />
