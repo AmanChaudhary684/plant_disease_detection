@@ -544,113 +544,96 @@ async def get_weather_risk(lat: float = None, lon: float = None, city: str = Non
     return {"success": True, "location": {"lat": lat, "lon": lon, "city": city or ""}, "disease": disease, "weather": weather, "disease_risk": risk}
 
 def generate_gradcam(model, img_tensor, device, class_idx=None):
-    """
-    Generate Grad-CAM heatmap for SWIN Transformer.
-    Works with both SWIN and EfficientNet-B3.
-    Returns heatmap as numpy array (224x224, values 0-1).
-    """
     model.eval()
     img_tensor = img_tensor.to(device)
-    img_tensor.requires_grad_(False)
- 
-    gradients = []
+
+    gradients  = []
     activations = []
- 
-    # ── Hook functions ─────────────────────────────────────────────────────────
+
     def save_gradient(grad):
-        gradients.append(grad)
- 
+        gradients.append(grad.detach().cpu())
+
     def save_activation(module, input, output):
-        activations.append(output)
-        output.register_hook(save_gradient)
- 
-    # ── Find the last feature layer ────────────────────────────────────────────
-    # For SWIN: hook into the last layer of base model
-    # For EfficientNet: hook into last conv block
+        # Detach and store — register hook for gradient
+        out = output.detach().requires_grad_(True)
+        activations.append(out)
+        out.register_hook(save_gradient)
+        return out
+
+    # Hook into SWIN's last normalization layer
     hook_handle = None
- 
     try:
-        # Try SWIN architecture first
-        if hasattr(model, 'base') and hasattr(model.base, 'layers'):
-            # SWIN Transformer — hook last layer norm
-            target_layer = model.base.layers[-1]
-            hook_handle   = target_layer.register_forward_hook(save_activation)
-        elif hasattr(model, 'blocks'):
-            # EfficientNet-B3 direct
-            target_layer = model.blocks[-1]
-            hook_handle   = target_layer.register_forward_hook(save_activation)
+        if hasattr(model, 'base') and hasattr(model.base, 'norm'):
+            hook_handle = model.base.norm.register_forward_hook(save_activation)
+        elif hasattr(model, 'base') and hasattr(model.base, 'layers'):
+            hook_handle = model.base.layers[-1].register_forward_hook(save_activation)
         else:
-            # Generic fallback
-            layers = list(model.children())
-            target_layer = layers[-2] if len(layers) > 1 else layers[-1]
-            hook_handle   = target_layer.register_forward_hook(save_activation)
+            return None
     except Exception:
         return None
- 
-    # ── Forward pass ───────────────────────────────────────────────────────────
-    img_tensor.requires_grad_(True)
+
+    # Forward pass with gradient tracking
     try:
+        img_tensor.requires_grad_(True)
         output = model(img_tensor)
-    except Exception:
+    except Exception as e:
         if hook_handle: hook_handle.remove()
         return None
- 
+
     if hook_handle:
         hook_handle.remove()
- 
-    if not activations:
-        return None
- 
-    # ── Get target class ───────────────────────────────────────────────────────
+
+    if not activations or not output.requires_grad:
+        # Manual backward on output
+        pass
+
     if class_idx is None:
         class_idx = output.argmax(dim=1).item()
- 
-    # ── Backward pass for gradients ────────────────────────────────────────────
+
+    # Backward
     model.zero_grad()
-    score = output[0, class_idx]
-    score.backward()
- 
-    if not gradients:
+    try:
+        one_hot = torch.zeros_like(output)
+        one_hot[0, class_idx] = 1.0
+        output.backward(gradient=one_hot, retain_graph=True)
+    except Exception:
         return None
- 
-    # ── Compute Grad-CAM ───────────────────────────────────────────────────────
-    grad   = gradients[0].detach().cpu()   # shape varies by model
-    activ  = activations[0].detach().cpu()
- 
-    # Handle SWIN output shape: [B, H*W, C] or [B, C, H, W]
-    if grad.dim() == 3:
-        # SWIN: [B, seq_len, channels] → reshape to spatial
-        B, seq_len, C = grad.shape
-        H = W = int(seq_len ** 0.5)
-        if H * W != seq_len:
-            # Not square — use global average
-            weights = grad.mean(dim=1)        # [B, C]
-            cam     = (weights.unsqueeze(1) * activ).sum(dim=2)  # [B, seq_len]
-            cam     = cam[0].reshape(int(seq_len**0.5), -1)
+
+    if not gradients or not activations:
+        return None
+
+    grad  = gradients[0]   # [B, H*W, C] for SWIN
+    activ = activations[0] # [B, H*W, C] for SWIN
+
+    try:
+        if grad.dim() == 3:
+            # SWIN: [B, seq_len, C]
+            B, seq_len, C = grad.shape
+            H = W = int(seq_len ** 0.5)
+
+            # Grad-CAM: weight channels by gradient mean
+            weights = grad[0].mean(dim=0)           # [C]
+            cam     = (activ[0] * weights).sum(dim=-1)  # [seq_len]
+            cam     = cam.reshape(H, W).numpy()
+
+        elif grad.dim() == 4:
+            # EfficientNet: [B, C, H, W]
+            weights = grad[0].mean(dim=(1, 2))      # [C]
+            cam     = (weights[:, None, None] * activ[0]).sum(dim=0).numpy()
         else:
-            grad_reshaped  = grad[0].reshape(H, W, C).permute(2, 0, 1)   # [C, H, W]
-            activ_reshaped = activ[0].reshape(H, W, C).permute(2, 0, 1)  # [C, H, W]
-            weights = grad_reshaped.mean(dim=(1, 2))   # [C]
-            cam     = (weights[:, None, None] * activ_reshaped).sum(dim=0)  # [H, W]
-    elif grad.dim() == 4:
-        # Conv: [B, C, H, W]
-        weights = grad[0].mean(dim=(1, 2))    # [C]
-        cam     = (weights[:, None, None] * activ[0]).sum(dim=0)  # [H, W]
-    else:
+            return None
+    except Exception:
         return None
- 
-    # ── Normalize heatmap ──────────────────────────────────────────────────────
-    cam = cam.numpy()
-    cam = np.maximum(cam, 0)   # ReLU
-    if cam.max() > 0:
-        cam = cam / cam.max()
+
+    # ReLU + normalize
+    cam = np.maximum(cam, 0)
+    if cam.max() > cam.min():
+        cam = (cam - cam.min()) / (cam.max() - cam.min())
     else:
-        cam = np.zeros_like(cam)
- 
-    # Resize to 224x224
+        return None   # uniform map — don't show
+
     import cv2
     cam_resized = cv2.resize(cam.astype(np.float32), (224, 224))
- 
     return cam_resized
  
  

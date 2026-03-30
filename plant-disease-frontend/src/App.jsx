@@ -644,6 +644,27 @@ function AppInner() {
                         : conf > 60 ? "⚠️ " + t("medium_confidence")
                         : "❓ " + t("low_confidence")}
                     </div>
+
+                    {/* Low confidence warning */}
+                    {conf < 50 && (
+                      <div style={{
+                        marginTop: 10,
+                        background: "rgba(239,68,68,0.1)",
+                        border: "1px solid rgba(239,68,68,0.3)",
+                        borderRadius: 10,
+                        padding: "10px 12px",
+                        fontSize: 12,
+                        color: "#fca5a5",
+                        lineHeight: 1.6,
+                      }}>
+                        ⚠️ <strong>Low confidence ({conf}%)</strong> — The AI is not certain about this diagnosis.
+                        Please try:
+                        <br />• Upload a clearer, closer photo of the affected leaf
+                        <br />• Ensure good lighting — avoid shadows
+                        <br />• Show only the diseased area, not the whole plant
+                        <br />• Try again with a different angle
+                      </div>
+                    )}
                     <button
                       style={S.voiceBtn}
                       onClick={() => speakDiagnosis(result, lang)}
