@@ -10,6 +10,7 @@ import LoginPage from "./LoginPage";
 import { exportDiagnosisPDF } from "./PDFExport";
 import CropCalendar from "./CropCalendar";
 import DiseaseStages from "./DiseaseStages";
+import IoTSimulator from "./IoTSimulator";
 
 // ── Weather Widget Component ───────────────────────────────────────────────
 function WeatherWidget({ disease }) {
@@ -284,7 +285,7 @@ function AppInner() {
         setGradcam(data.gradcam);
         setShowGradcam(true);
       } else {
-        alert("Grad-CAM not available for this image.");
+        setError("Grad-CAM could not generate heatmap. Try with a clearer image.");
       }
     } catch (e) {
       console.error("Grad-CAM error:", e);
@@ -425,6 +426,12 @@ function AppInner() {
             <button style={{ ...S.historyBtn, ...(screen === "progression" ? S.historyBtnActive : {}) }}
               onClick={() => setScreen(prev => prev === "progression" ? "home" : "progression")}>
               📊 {lang === "hi" ? "प्रगति ट्रैकर" : "Progression"}
+            </button>
+
+            <button
+              style={{ ...S.historyBtn, ...(screen === "iot" ? S.historyBtnActive : {}) }}
+              onClick={() => setScreen(prev => prev === "iot" ? "home" : "iot")}>
+              🤖 {lang === "hi" ? "IoT सेंसर" : "IoT Sensors"}
             </button>
           </div>
         </header>
@@ -798,6 +805,12 @@ function AppInner() {
         {screen === "map" && (
           <main style={{paddingBottom:40}}>
             <OutbreakMap />
+          </main>
+        )}
+
+        {screen === "iot" && (
+          <main style={{ paddingBottom: 40 }}>
+            <IoTSimulator lang={lang} />
           </main>
         )}
 
