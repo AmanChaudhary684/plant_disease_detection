@@ -119,9 +119,43 @@ export default function ResultPage({ result, preview, file }) {
                   : "❓ Low confidence — try a clearer photo"}
               </div>
 
-              {conf < 50 && (
+              {/* Low confidence warning < 40% */}
+              {conf < 40 && (
                 <div style={R.lowConfWarn}>
-                  ⚠️ Low confidence ({conf}%) — please upload a clearer, closer photo of the diseased leaf in good lighting.
+                  <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>
+                    ⚠️ Low Confidence ({conf}%) — Diagnosis may not be reliable
+                  </div>
+                  <div style={{ color: "#7f1d1d", marginBottom: 8 }}>
+                    <strong>Possible reasons:</strong><br />
+                    • This crop may not be in our supported list<br />
+                    • Photo needs better lighting or closer focus<br />
+                    • Disease may be at a very early stage<br />
+                    • Multiple leaves or background in the photo
+                  </div>
+                  <div style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4, color: "#dc2626", fontSize: 12 }}>
+                      ✅ Our model supports these 14 crops:
+                    </div>
+                    <div style={{ color: "#374151", fontSize: 11, lineHeight: 1.7 }}>
+                      Apple · Blueberry · Cherry · Corn · Grape · Orange · Peach ·
+                      Pepper · Potato · Raspberry · Soybean (healthy only) ·
+                      Squash · Strawberry · Tomato
+                    </div>
+                  </div>
+                  <div style={{ color: "#7f1d1d", fontSize: 11 }}>
+                    💡 <strong>Recommendation:</strong> Upload a clearer, closer photo
+                    of only the diseased leaf in good natural lighting — or consult your
+                    nearest <strong>Krishi Vigyan Kendra (KVK)</strong> for expert diagnosis.
+                  </div>
+                </div>
+              )}
+
+              {/* Medium confidence advisory 40-60% */}
+              {conf >= 40 && conf < 60 && (
+                <div style={{ marginTop: 10, background: "#fefce8", border: "1px solid #fde047", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#713f12", lineHeight: 1.6, marginBottom: 12 }}>
+                  ⚠️ <strong>Medium confidence ({conf}%)</strong> — Result is plausible
+                  but not certain. For high-value crops, verify with an agricultural
+                  expert or try uploading a clearer photo.
                 </div>
               )}
 
