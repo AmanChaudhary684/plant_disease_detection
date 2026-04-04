@@ -348,24 +348,51 @@ DISEASE_INFO = {
 
 
 def get_disease_info(class_name: str) -> dict:
+    """Match class name to disease info — handles all naming variations."""
+
+    # 1. Direct match
     if class_name in DISEASE_INFO:
         return DISEASE_INFO[class_name]
-    normalized = class_name.replace(" ", "_").replace("-", "_")
+
+    # 2. Normalize commas → underscores (Pepper,_bell → Pepper__bell)
+    normalized = class_name.replace(",_", "__").replace(", ", "__").replace(",", "__")
+    if normalized in DISEASE_INFO:
+        return DISEASE_INFO[normalized]
+
+    # 3. Space/dash/underscore normalization
+    clean = class_name.replace(" ", "_").replace("-", "_")
     for key in DISEASE_INFO:
-        if key.replace(" ", "_") == normalized:
+        if key.replace(" ", "_").replace("-", "_") == clean:
             return DISEASE_INFO[key]
+
+    # 4. Case-insensitive partial match
     class_lower = class_name.lower()
     for key in DISEASE_INFO:
-        if key.lower() in class_lower or class_lower in key.lower():
+        if key.lower() == class_lower:
             return DISEASE_INFO[key]
-    parts = class_name.replace("___", " ").replace("_", " ").split()
+
+    # 5. Fuzzy match — plant name + disease name both present
+    class_lower = class_name.lower().replace("___", " ").replace("_", " ").replace(",", "")
+    for key in DISEASE_INFO:
+        key_lower = key.lower().replace("___", " ").replace("_", " ").replace(",", "")
+        # Split into plant and disease parts
+        parts = key_lower.split()
+        if len(parts) >= 2:
+            plant = parts[0]
+            disease_words = parts[1:]
+            if plant in class_lower:
+                if any(w in class_lower for w in disease_words if len(w) > 4):
+                    return DISEASE_INFO[key]
+
+    # 6. Fallback — extract plant name and give generic info
+    parts = class_name.replace("___", " — ").replace("_", " ").replace(",", "").split()
     plant = parts[0] if parts else "Plant"
     return {
         "description": f"Disease detected in {plant}. Please consult a local agricultural expert.",
         "symptoms": ["Visual disease symptoms detected in leaf image"],
         "causes": "Consult agricultural extension resources for details.",
         "organic_treatment": ["Isolate affected plants", "Consult local agricultural expert"],
-        "chemical_treatment": ["Consult local agricultural expert"],
+        "chemical_treatment": ["Consult local agricultural expert for appropriate treatment"],
         "prevention": ["Regular monitoring", "Good agricultural practices"],
         "severity": "Unknown"
     }
@@ -544,117 +571,68 @@ async def get_weather_risk(lat: float = None, lon: float = None, city: str = Non
     return {"success": True, "location": {"lat": lat, "lon": lon, "city": city or ""}, "disease": disease, "weather": weather, "disease_risk": risk}
 
 def generate_gradcam(model, img_tensor, device, class_idx=None):
+    """
+    Simplified Grad-CAM using input gradient saliency.
+    Works reliably with both SWIN and EfficientNet.
+    """
+    import cv2
     model.eval()
-    img_tensor = img_tensor.to(device)
+    img_tensor = img_tensor.to(device).requires_grad_(True)
 
-    gradients  = []
-    activations = []
-
-    def save_gradient(grad):
-        gradients.append(grad.detach().cpu())
-
-    def save_activation(module, input, output):
-        # Detach and store — register hook for gradient
-        out = output.detach().requires_grad_(True)
-        activations.append(out)
-        out.register_hook(save_gradient)
-        return out
-
-    # Hook into SWIN's last normalization layer
-    hook_handle = None
     try:
-        if hasattr(model, 'base') and hasattr(model.base, 'norm'):
-            hook_handle = model.base.norm.register_forward_hook(save_activation)
-        elif hasattr(model, 'base') and hasattr(model.base, 'layers'):
-            hook_handle = model.base.layers[-1].register_forward_hook(save_activation)
-        else:
-            return None
-    except Exception:
-        return None
-
-    # Forward pass with gradient tracking
-    try:
-        img_tensor.requires_grad_(True)
         output = model(img_tensor)
     except Exception as e:
-        if hook_handle: hook_handle.remove()
+        print(f"Grad-CAM forward pass failed: {e}")
         return None
-
-    if hook_handle:
-        hook_handle.remove()
-
-    if not activations or not output.requires_grad:
-        # Manual backward on output
-        pass
 
     if class_idx is None:
         class_idx = output.argmax(dim=1).item()
 
-    # Backward
+    # Backward on target class score
     model.zero_grad()
-    try:
-        one_hot = torch.zeros_like(output)
-        one_hot[0, class_idx] = 1.0
-        output.backward(gradient=one_hot, retain_graph=True)
-    except Exception:
+    score = output[0, class_idx]
+    score.backward()
+
+    # Get input gradients — works with ANY model architecture
+    if img_tensor.grad is None:
         return None
 
-    if not gradients or not activations:
-        return None
+    # Gradient-based saliency map
+    grad = img_tensor.grad.data.abs()   # [1, 3, 224, 224]
+    grad = grad[0]                       # [3, 224, 224]
 
-    grad  = gradients[0]   # [B, H*W, C] for SWIN
-    activ = activations[0] # [B, H*W, C] for SWIN
+    # Take max across color channels
+    saliency, _ = grad.max(dim=0)       # [224, 224]
+    saliency = saliency.cpu().numpy()
 
-    try:
-        if grad.dim() == 3:
-            # SWIN: [B, seq_len, C]
-            B, seq_len, C = grad.shape
-            H = W = int(seq_len ** 0.5)
+    # Smooth with gaussian blur for better visualization
+    saliency = cv2.GaussianBlur(saliency, (15, 15), 0)
 
-            # Grad-CAM: weight channels by gradient mean
-            weights = grad[0].mean(dim=0)           # [C]
-            cam     = (activ[0] * weights).sum(dim=-1)  # [seq_len]
-            cam     = cam.reshape(H, W).numpy()
-
-        elif grad.dim() == 4:
-            # EfficientNet: [B, C, H, W]
-            weights = grad[0].mean(dim=(1, 2))      # [C]
-            cam     = (weights[:, None, None] * activ[0]).sum(dim=0).numpy()
-        else:
-            return None
-    except Exception:
-        return None
-
-    # ReLU + normalize
-    cam = np.maximum(cam, 0)
-    if cam.max() > cam.min():
-        cam = (cam - cam.min()) / (cam.max() - cam.min())
+    # Normalize to 0-1
+    if saliency.max() > saliency.min():
+        saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min())
     else:
-        return None   # uniform map — don't show
+        return None
 
+    return saliency 
+ 
+def apply_colormap(heatmap, original_img_array, alpha=0.5):
     import cv2
-    cam_resized = cv2.resize(cam.astype(np.float32), (224, 224))
-    return cam_resized
- 
- 
-def apply_colormap(heatmap, original_img_array, alpha=0.45):
-    """
-    Overlay heatmap on original image using jet colormap.
-    Returns blended image as numpy array (224x224x3, uint8).
-    """
-    import cv2
- 
-    # Apply colormap (jet: blue=low, green=medium, red=high activation)
+    # Apply jet colormap
     heatmap_uint8 = np.uint8(255 * heatmap)
     colored_map   = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
     colored_map   = cv2.cvtColor(colored_map, cv2.COLOR_BGR2RGB)
- 
-    # Resize original image to 224x224
-    orig_resized = cv2.resize(original_img_array, (224, 224))
- 
-    # Blend
-    blended = (alpha * colored_map + (1 - alpha) * orig_resized).astype(np.uint8)
-    return blended
+
+    # Resize original
+    orig_resized = cv2.resize(
+        np.array(original_img_array, dtype=np.uint8),
+        (224, 224)
+    )
+
+    # Blend — more original, less heatmap for clarity
+    blended = (alpha * colored_map.astype(np.float32) +
+               (1 - alpha) * orig_resized.astype(np.float32))
+    return np.clip(blended, 0, 255).astype(np.uint8)
  
  
 @app.post("/api/detect/gradcam")
