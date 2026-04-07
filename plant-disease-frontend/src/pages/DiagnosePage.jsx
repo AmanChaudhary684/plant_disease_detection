@@ -6,16 +6,23 @@ import { OfflineDetector } from "../OfflineMode";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+const SUPPORTED_CROPS = [
+  "Apple","Blueberry","Cherry","Corn","Grape","Orange",
+  "Peach","Pepper","Potato","Raspberry","Soybean",
+  "Squash","Strawberry","Tomato"
+];
+
 export default function DiagnosePage({ onResult }) {
-  const [preview, setPreview]     = useState(null);
-  const [file, setFile]           = useState(null);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState(null);
-  const [dragOver, setDragOver]   = useState(false);
-  const [showOffline, setShowOffline] = useState(false);
-  const fileRef = useRef();
-  const { lang, t } = useLang();
-  const navigate    = useNavigate();
+  const [preview, setPreview]           = useState(null);
+  const [file, setFile]                 = useState(null);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState(null);
+  const [dragOver, setDragOver]         = useState(false);
+  const [showOffline, setShowOffline]   = useState(false);
+  const [selectedCrop, setSelectedCrop] = useState("");
+  const fileRef  = useRef();
+  const { lang } = useLang();
+  const navigate = useNavigate();
 
   const handleFile = useCallback((f) => {
     if (!f?.type.startsWith("image/")) { setError("Please upload a JPG or PNG image."); return; }
@@ -31,6 +38,7 @@ export default function DiagnosePage({ onResult }) {
     try {
       const form = new FormData();
       form.append("file", file);
+      if (selectedCrop) form.append("crop_hint", selectedCrop);
       const res  = await fetch(`${API_BASE}/api/detect`, { method: "POST", body: form });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Detection failed"); }
       const data = await res.json();
@@ -43,7 +51,6 @@ export default function DiagnosePage({ onResult }) {
 
   const handleOfflineResult = (offlineResult) => {
     const isHealthy = offlineResult.diagnosis.is_healthy;
-    const topClass  = offlineResult.diagnosis.top_prediction.class_id;
     const diseaseInfo = {
       description: "Offline diagnosis — connect to internet for detailed information.",
       symptoms: ["Connect to internet for detailed symptom information"],
@@ -77,6 +84,8 @@ export default function DiagnosePage({ onResult }) {
         <div style={D.layout}>
           {/* Upload area */}
           <div style={D.uploadSection}>
+
+            {/* Upload zone */}
             <div
               style={{
                 ...D.uploadZone,
@@ -112,7 +121,7 @@ export default function DiagnosePage({ onResult }) {
                       📁 Change Photo
                     </button>
                     <button style={D.previewRemoveBtn}
-                      onClick={(e) => { e.stopPropagation(); setPreview(null); setFile(null); }}>
+                      onClick={(e) => { e.stopPropagation(); setPreview(null); setFile(null); setSelectedCrop(""); }}>
                       ✕ Remove
                     </button>
                   </div>
@@ -120,10 +129,45 @@ export default function DiagnosePage({ onResult }) {
               )}
             </div>
 
-            {error && (
-              <div style={D.errorBox}>⚠️ {error}</div>
+            {/* ── Crop Selector — shows after photo uploaded ── */}
+            {preview && (
+              <div style={D.cropSelectorCard}>
+                <label style={D.cropSelectorLabel}>
+                  🌾 {lang === "hi"
+                    ? "यह किस फसल की पत्ती है? (वैकल्पिक — सटीकता बढ़ाता है)"
+                    : "What crop is this? (Optional — improves accuracy)"}
+                </label>
+                <select
+                  value={selectedCrop}
+                  onChange={e => setSelectedCrop(e.target.value)}
+                  style={D.cropSelect}>
+                  <option value="">
+                    {lang === "hi" ? "अपने आप पहचानें" : "Detect automatically"}
+                  </option>
+                  {SUPPORTED_CROPS.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                {selectedCrop ? (
+                  <div style={D.cropSelectedNote}>
+                    ✅ {lang === "hi"
+                      ? `Model ${selectedCrop} की बीमारियों पर ध्यान देगा`
+                      : `Model will prioritize ${selectedCrop} diseases — better accuracy`}
+                  </div>
+                ) : (
+                  <div style={D.cropAutoNote}>
+                    💡 {lang === "hi"
+                      ? "फसल चुनने से निदान की सटीकता बढ़ती है"
+                      : "Selecting your crop helps reduce misclassification for unsupported crops"}
+                  </div>
+                )}
+              </div>
             )}
 
+            {/* Error */}
+            {error && <div style={D.errorBox}>⚠️ {error}</div>}
+
+            {/* Detect button */}
             <button
               style={{ ...D.detectBtn, ...(!file || loading ? D.detectBtnDisabled : {}) }}
               disabled={!file || loading}
@@ -133,20 +177,45 @@ export default function DiagnosePage({ onResult }) {
                 : <>🔬 {lang === "hi" ? "बीमारी पहचानें" : "Detect Disease"}</>}
             </button>
 
-            {/* Offline mode */}
-            <button style={D.offlineBtn} onClick={() => setShowOffline(!showOffline)}>
-              📵 {lang === "hi" ? "ऑफलाइन मोड" : "Use Offline Mode"}
-            </button>
+            {/* ── Offline Mode — improved UI ── */}
+            <div style={D.offlineCard}>
+              <div style={D.offlineLeft}>
+                <div style={D.offlineTitle}>
+                  📵 {lang === "hi" ? "इंटरनेट नहीं? ऑफलाइन मोड" : "No internet? Use Offline Mode"}
+                </div>
+                <div style={D.offlineSub}>
+                  {lang === "hi"
+                    ? "ONNX मॉडल सीधे ब्राउज़र में चलता है — सर्वर की जरूरत नहीं"
+                    : "ONNX model runs directly in your browser — no server needed"}
+                </div>
+              </div>
+              <button
+                style={{ ...D.offlineToggleBtn, ...(showOffline ? D.offlineToggleBtnActive : {}) }}
+                onClick={() => setShowOffline(!showOffline)}>
+                {showOffline
+                  ? (lang === "hi" ? "छुपाएं" : "Hide")
+                  : (lang === "hi" ? "चालू करें" : "Enable")}
+              </button>
+            </div>
 
             {showOffline && file && preview && (
-              <div style={{ marginTop: 16 }}>
+              <div style={{ marginTop: 4 }}>
                 <OfflineDetector file={file} preview={preview} onResult={handleOfflineResult} />
+              </div>
+            )}
+            {showOffline && !file && (
+              <div style={D.offlineNoFile}>
+                ⬆️ {lang === "hi"
+                  ? "पहले ऊपर एक पत्ती की फोटो अपलोड करें"
+                  : "Upload a leaf photo above first, then use offline detection"}
               </div>
             )}
           </div>
 
-          {/* Right side tips */}
+          {/* Right side */}
           <div style={D.tipsSection}>
+
+            {/* Tips */}
             <div style={D.tipsCard}>
               <div style={D.tipsTitle}>📸 Tips for Best Results</div>
               {[
@@ -163,13 +232,14 @@ export default function DiagnosePage({ onResult }) {
               ))}
             </div>
 
+            {/* Model stats */}
             <div style={D.statsCard}>
               <div style={D.tipsTitle}>🤖 About Our Model</div>
               {[
-                { label: "Architecture", value: "SWIN Transformer" },
-                { label: "Parameters", value: "86.8M" },
-                { label: "Lab Accuracy", value: "99.74%" },
-                { label: "Real-World Acc", value: "73.19%" },
+                { label: "Architecture",    value: "SWIN Transformer" },
+                { label: "Parameters",      value: "86.8M" },
+                { label: "Lab Accuracy",    value: "99.74%" },
+                { label: "Real-World Acc",  value: "73.19%" },
                 { label: "Disease Classes", value: "38" },
                 { label: "Training Images", value: "8,237" },
               ].map(s => (
@@ -180,12 +250,24 @@ export default function DiagnosePage({ onResult }) {
               ))}
             </div>
 
+            {/* Supported crops — clickable */}
             <div style={D.cropsCard}>
               <div style={D.tipsTitle}>🌾 Supported Crops</div>
               <div style={D.cropsList}>
-                {["Apple","Blueberry","Cherry","Corn","Grape","Orange","Peach","Pepper","Potato","Raspberry","Soybean","Squash","Strawberry","Tomato"].map(c => (
-                  <span key={c} style={D.cropTag}>{c}</span>
+                {SUPPORTED_CROPS.map(c => (
+                  <span
+                    key={c}
+                    style={{
+                      ...D.cropTag,
+                      ...(selectedCrop === c ? D.cropTagSelected : {}),
+                    }}
+                    onClick={() => { if (preview) setSelectedCrop(selectedCrop === c ? "" : c); }}>
+                    {c}
+                  </span>
                 ))}
+              </div>
+              <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
+                {preview ? "💡 Click a crop above to select it" : "Upload a photo to select your crop"}
               </div>
             </div>
           </div>
@@ -204,25 +286,35 @@ const D = {
   pageDesc: { fontSize: 16, color: "#6b7280", lineHeight: 1.7 },
   layout: { display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 28, alignItems: "start" },
   uploadSection: { display: "flex", flexDirection: "column", gap: 12 },
-  uploadZone: { border: "2px dashed #bbf7d0", borderRadius: 20, background: "#fff", minHeight: 320, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.2s ease", overflow: "hidden" },
+  uploadZone: { border: "2px dashed #bbf7d0", borderRadius: 20, background: "#fff", minHeight: 300, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.2s ease", overflow: "hidden" },
   uploadZoneActive: { border: "2px dashed #16a34a", background: "#f0fdf4", transform: "scale(1.01)" },
-  uploadZoneWithPreview: { border: "2px solid #bbf7d0", cursor: "default", minHeight: 360 },
+  uploadZoneWithPreview: { border: "2px solid #bbf7d0", cursor: "default", minHeight: 320 },
   uploadContent: { textAlign: "center", padding: 40 },
   uploadIconWrap: { width: 80, height: 80, borderRadius: "50%", background: "#f0fdf4", border: "2px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" },
   uploadTitle: { fontSize: 18, fontWeight: 600, color: "#374151", marginBottom: 8 },
   uploadSub: { fontSize: 14, color: "#9ca3af", marginBottom: 12 },
   uploadFormats: { display: "inline-block", background: "#f3f4f6", borderRadius: 6, padding: "4px 12px", fontSize: 12, color: "#6b7280" },
   previewWrap: { position: "relative", width: "100%" },
-  previewImg: { width: "100%", maxHeight: 400, objectFit: "contain", display: "block", borderRadius: 18 },
+  previewImg: { width: "100%", maxHeight: 380, objectFit: "contain", display: "block", borderRadius: 18 },
   previewOverlay: { position: "absolute", bottom: 12, right: 12, display: "flex", gap: 8 },
   previewChangeBtn: { background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" },
   previewRemoveBtn: { background: "rgba(220,38,38,0.7)", border: "none", color: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" },
+  cropSelectorCard: { background: "#fff", border: "1px solid #bbf7d0", borderRadius: 12, padding: "14px 16px" },
+  cropSelectorLabel: { display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 },
+  cropSelect: { width: "100%", border: "1px solid #d1fae5", borderRadius: 8, padding: "9px 12px", fontSize: 14, color: "#374151", fontFamily: "'DM Sans',sans-serif", outline: "none", background: "#f0fdf4", cursor: "pointer" },
+  cropSelectedNote: { fontSize: 12, color: "#16a34a", fontWeight: 600, marginTop: 6 },
+  cropAutoNote: { fontSize: 11, color: "#9ca3af", marginTop: 6 },
   errorBox: { background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", color: "#dc2626", fontSize: 14 },
   detectBtn: { width: "100%", padding: "16px", borderRadius: 14, border: "none", background: "#16a34a", color: "#fff", fontFamily: "'DM Sans',sans-serif", fontSize: 16, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 16px rgba(22,163,74,0.3)" },
   detectBtnDisabled: { opacity: 0.45, cursor: "not-allowed", boxShadow: "none" },
   btnSpinner: { width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite", display: "inline-block" },
-  offlineBtn: { width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280", fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 500, cursor: "pointer" },
-  // Right side
+  offlineCard: { background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
+  offlineLeft: {},
+  offlineTitle: { fontSize: 13, fontWeight: 600, color: "#1d4ed8", marginBottom: 2 },
+  offlineSub: { fontSize: 11, color: "#6b7280" },
+  offlineToggleBtn: { background: "#2563eb", border: "none", color: "#fff", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap", flexShrink: 0 },
+  offlineToggleBtnActive: { background: "#dc2626" },
+  offlineNoFile: { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6b7280", textAlign: "center" },
   tipsSection: { display: "flex", flexDirection: "column", gap: 16 },
   tipsCard: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" },
   tipsTitle: { fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 14 },
@@ -235,5 +327,6 @@ const D = {
   statRowVal: { fontSize: 13, fontWeight: 700, color: "#16a34a" },
   cropsCard: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 },
   cropsList: { display: "flex", flexWrap: "wrap", gap: 6 },
-  cropTag: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "3px 8px", fontSize: 12, color: "#16a34a", fontWeight: 500 },
+  cropTag: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "#16a34a", fontWeight: 500, cursor: "pointer", transition: "all 0.15s ease" },
+  cropTagSelected: { background: "#16a34a", border: "1px solid #16a34a", color: "#fff", fontWeight: 700 },
 };
