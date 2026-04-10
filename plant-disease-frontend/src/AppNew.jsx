@@ -53,6 +53,26 @@ function AppInner() {
                 setDiagnosisResult(result);
                 setDiagnosisPreview(preview);
                 setDiagnosisFile(file);
+
+                // ── Save to localStorage history ──────────────────────────────────
+                try {
+                  const entry = {
+                    id:         Date.now(),
+                    timestamp:  new Date().toISOString(),
+                    preview:    preview,
+                    disease:    result.diagnosis.top_prediction.display_name,
+                    confidence: result.diagnosis.top_prediction.confidence,
+                    isHealthy:  result.diagnosis.is_healthy,
+                    severity:   result.disease_info.severity,
+                  };
+                  const existing = JSON.parse(
+                    localStorage.getItem("leafdoc_history") || "[]"
+                  );
+                  const updated = [entry, ...existing].slice(0, 20);
+                  localStorage.setItem("leafdoc_history", JSON.stringify(updated));
+                } catch (e) {
+                  console.error("History save failed:", e);
+                }
               }}
             />
           } />
