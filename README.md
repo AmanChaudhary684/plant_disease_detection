@@ -45,7 +45,7 @@ Or download the ZIP from GitHub → Extract it → Open the folder.
 > ⚠️ The model file is too large for GitHub (~300MB). You must download it separately.
 
 **Download from Google Drive:**
-👉 [Download best_model.pth and model_metadata.json](https://drive.google.com/drive/folders/YOUR_FOLDER_ID)
+👉 https://drive.google.com/drive/folders/1cbLSFCwGSo_Vevl9GAfJBbJ8BaV0IqJa?usp=drive_link
 
 After downloading, place **both files** inside the `backend/` folder:
 
