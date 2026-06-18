@@ -51,6 +51,7 @@ export default function OutbreakMap() {
   const [filter, setFilter]               = useState("All");
   const [timeMode, setTimeMode]           = useState("all");
   const [weeksAgo, setWeeksAgo]           = useState(0);
+  const [weekLoading, setWeekLoading]     = useState(false);
   const [weekMeta, setWeekMeta]           = useState(null);
   const [trends, setTrends]               = useState({});
   const [mapReady, setMapReady]           = useState(false);
@@ -156,6 +157,7 @@ export default function OutbreakMap() {
   // ── Week data loader ──────────────────────────────────────────────────────
   const loadWeekData = (wAgo) => {
     setLoading(true);
+    setWeekLoading(true);
     fetch(`${API_BASE}/api/community/map/week?weeks_ago=${wAgo}`)
       .then(r => r.json())
       .then(d => {
@@ -165,7 +167,7 @@ export default function OutbreakMap() {
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { setLoading(false); setWeekLoading(false); });
   };
 
   const handleTimeModeSwitch = (mode) => {
@@ -194,7 +196,15 @@ export default function OutbreakMap() {
           <div style={M.headerIcon}>🗺️</div>
           <div>
             <div style={M.headerTitle}>Disease Outbreak Map</div>
-            <div style={M.headerSub}>India · Real-time community reports · Innovation #3</div>
+            <div style={{ ...M.headerSub, display:"flex", alignItems:"center", gap:6 }}>
+              {timeMode === "all" && (
+                <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:20, padding:"1px 8px", fontSize:10, fontWeight:700, color:"#16a34a" }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:"#16a34a", animation:"pulse 2s ease-in-out infinite", display:"inline-block" }} />
+                  LIVE
+                </span>
+              )}
+              India · Community reports · Innovation #3
+            </div>
           </div>
         </div>
         {stats && (
@@ -226,7 +236,10 @@ export default function OutbreakMap() {
           <div style={M.weekSelector}>
             {[{l:"This Week",w:0},{l:"1 Week Ago",w:1},{l:"2 Weeks Ago",w:2},{l:"3 Weeks Ago",w:3}].map(({l,w}) => (
               <button key={w} style={{ ...M.weekBtn, ...(weeksAgo === w ? M.weekBtnActive : {}) }}
-                onClick={() => { setWeeksAgo(w); loadWeekData(w); }}>{l}</button>
+                onClick={() => { setWeeksAgo(w); loadWeekData(w); }}
+                disabled={weekLoading}>
+                {weekLoading && weeksAgo === w ? "⏳ Loading..." : l}
+                </button>
             ))}
           </div>
         )}
@@ -398,9 +411,12 @@ export default function OutbreakMap() {
             </div>
           </div>
 
+          <div style={{ background: "#fefce8", border: "1px solid #fde047", borderRadius: 10, padding: "10px 12px", fontSize: 11, color: "#713f12", lineHeight: 1.6, marginBottom: 8 }}>
+            ⚠️ <strong>Demo data:</strong> Outbreak reports shown are simulated seed data for demonstration. Real data will populate as farmers submit reports.
+          </div>
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "10px 12px", fontSize: 11, color: "#6b7280", lineHeight: 1.6 }}>
             🔒 All reports are anonymized. No personal data is stored. Reports help warn farmers about disease outbreaks in their region.
-          </div>
+          </div> 
         </div>
       </div>
     </div>

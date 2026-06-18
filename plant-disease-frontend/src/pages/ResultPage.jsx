@@ -7,6 +7,8 @@ import CropCalendar from "../CropCalendar";
 import DiseaseStages from "../DiseaseStages";
 import { CommunityReportButton } from "../CommunityReport";
 import { exportDiagnosisPDF } from "../PDFExport";
+import { AddToPlantModal } from "../ProgressionTracker";
+import { saveToPlant } from "../ProgressionTracker";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -26,6 +28,7 @@ export default function ResultPage({ result, preview, file }) {
   const [gradcam, setGradcam]             = useState(null);
   const [gradcamLoading, setGradcamLoading] = useState(false);
   const [activeSection, setActiveSection] = useState("about");
+  const [showProgressionModal, setShowProgressionModal] = useState(false);
 
   if (!result) { navigate("/diagnose"); return null; }
 
@@ -193,7 +196,7 @@ export default function ResultPage({ result, preview, file }) {
               <button style={{ ...R.actionBtn, ...R.actionBtnWhatsapp }} onClick={shareOnWhatsApp}>
                 📱 Share on WhatsApp
               </button>
-              <button style={{ ...R.actionBtn, ...R.actionBtnPurple }} onClick={() => navigate("/progression")}>
+              <button style={{ ...R.actionBtn, ...R.actionBtnPurple }} onClick={() => setShowProgressionModal(true)}>
                 📊 Track Progression
               </button>
               <CommunityReportButton result={result} lang={lang} />
@@ -285,6 +288,18 @@ export default function ResultPage({ result, preview, file }) {
               <div style={R.sectionCard}>
                 <DiseaseStages diseaseClassId={result.diagnosis.top_prediction.class_id} lang={lang} />
               </div>
+            )}
+
+            {/* Add to Plant Modal */}
+            {showProgressionModal && result && (
+              <AddToPlantModal
+                result={result}
+                onSave={(plant) => {
+                  setShowProgressionModal(false);
+                  navigate("/progression");
+                }}
+                onClose={() => setShowProgressionModal(false)}
+              />
             )}
 
             {/* Disclaimer */}

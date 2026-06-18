@@ -11,7 +11,7 @@ const STATS = [
 ];
 
 const FEATURES = [
-  { icon: "🔬", title: "AI Diagnosis",         desc: "SWIN Transformer model trained on 50,000+ images gives instant diagnosis with 73.19% real-world accuracy.", color: "#dcfce7", border: "#86efac", iconBg: "#16a34a" },
+  { icon: "🔬", title: "AI Diagnosis",         desc: "SWIN Transformer model trained on 8,237 real-world images gives instant diagnosis with 73.19% real-world accuracy.", color: "#dcfce7", border: "#86efac", iconBg: "#16a34a" },
   { icon: "📵", title: "Works Offline",         desc: "ONNX-powered offline detection — works even without internet in remote farm areas.", color: "#dbeafe", border: "#93c5fd", iconBg: "#2563eb" },
   { icon: "🗺️", title: "Outbreak Map",          desc: "Real-time community disease outbreak map of India — know what's spreading in your state.", color: "#fef9c3", border: "#fde047", iconBg: "#ca8a04" },
   { icon: "🌦️", title: "Weather Risk",          desc: "Environmental risk analysis — checks if today's weather increases disease spread in your area.", color: "#fce7f3", border: "#f9a8d4", iconBg: "#db2777" },
