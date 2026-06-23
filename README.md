@@ -23,9 +23,11 @@ Install these before starting:
 
 | Tool | Download | Check version |
 |------|----------|---------------|
-| Python 3.10+ | https://python.org/downloads | `python --version` |
+| Python 3.10–3.13 | https://python.org/downloads | `python --version` |
 | Node.js 18+ | https://nodejs.org | `node --version` |
 | Git | https://git-scm.com | `git --version` |
+
+> ⚠️ **Python 3.13 users:** The old `requirements.txt` used `numpy==1.26.4` which is NOT compatible with Python 3.13. The updated `requirements.txt` in this repo fixes this automatically.
 
 ---
 
@@ -58,7 +60,7 @@ plant_disease_detection/
     └── ...
 ```
 
-> **Without the model files:** The backend still runs but in "demo mode" — it returns a hardcoded prediction instead of real AI diagnosis. The app will work but detection won't be real.
+> **Without the model files:** The backend still runs but in "demo mode" — it returns a hardcoded prediction instead of real AI diagnosis.
 
 ---
 
@@ -78,8 +80,12 @@ python -m venv venv
 venv\Scripts\activate
 
 # You should see (venv) at the start of your terminal line
+
+# Upgrade pip first
+python -m pip install --upgrade pip
+
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt --only-binary=:all:
 
 # Start the backend
 python -m uvicorn main:app --reload --port 8000
@@ -96,8 +102,11 @@ python3 -m venv venv
 # Activate it
 source venv/bin/activate
 
+# Upgrade pip first
+python -m pip install --upgrade pip
+
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt --only-binary=:all:
 
 # Start the backend
 uvicorn main:app --reload --port 8000
@@ -158,6 +167,29 @@ Sign in with Google → you're ready to detect plant diseases!
 
 ## ❌ Common Errors and Fixes
 
+### `numpy==1.26.4` fails to install (Python 3.13)
+
+**Cause:** NumPy 1.26.4 does not support Python 3.13. The updated `requirements.txt` fixes this, but if you still face issues:
+
+**Fix:**
+```bash
+pip install numpy==2.2.6 --only-binary=:all:
+pip install -r requirements.txt --only-binary=:all:
+```
+
+---
+
+### `No module named uvicorn` after activating venv
+
+**Cause:** Dependencies not installed yet in the venv.
+
+**Fix:**
+```bash
+pip install -r requirements.txt --only-binary=:all:
+```
+
+---
+
 ### `'vite' is not recognized` (Frontend)
 
 **Cause:** `npm install` was never run — `node_modules` folder is missing.
@@ -180,7 +212,7 @@ npm run dev
 cd backend
 python -m venv venv
 venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt --only-binary=:all:
 ```
 
 ---
@@ -204,7 +236,7 @@ venv\Scripts\activate          # Windows
 source venv/bin/activate       # Mac/Linux
 
 # Then install
-pip install -r requirements.txt
+pip install -r requirements.txt --only-binary=:all:
 ```
 
 ---
@@ -243,7 +275,7 @@ plant_disease_detection/
 │   ├── main.py                     # Main API — all routes + SWIN model
 │   ├── weather_service.py          # Open-Meteo weather + risk scoring
 │   ├── community_outbreak_service.py  # SQLite outbreak map
-│   ├── requirements.txt            # Python dependencies
+│   ├── requirements.txt            # Python dependencies (Python 3.13 compatible)
 │   ├── best_model.pth              # ⬅ Model file (download separately)
 │   ├── model_metadata.json         # ⬅ Class names (download separately)
 │   ├── class_names.json
@@ -251,7 +283,7 @@ plant_disease_detection/
 │
 ├── plant-disease-frontend/         # React + Vite frontend
 │   ├── src/
-│   │   ├── AppNew.jsx              # Main app with React Router
+│   │   ├── AppNew.jsx              # Main app with React Router (multi-page)
 │   │   ├── App.jsx                 # Original dark-theme version
 │   │   ├── pages/
 │   │   │   ├── LandingPage.jsx
