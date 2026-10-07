@@ -5,6 +5,7 @@ Run: uvicorn main:app --reload --port 8000
 """
 
 import base64
+import os
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,9 +32,18 @@ app = FastAPI(
     version="3.0.0",
 )
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip()
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
+if FRONTEND_URL:
+    ALLOWED_ORIGINS.append(FRONTEND_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
