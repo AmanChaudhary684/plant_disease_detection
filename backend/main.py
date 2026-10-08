@@ -420,14 +420,23 @@ async def load_model():
                 metadata = json.load(f)
             class_names = metadata["class_names"]
             num_classes  = metadata["num_classes"]
-            swin_base = timm.create_model('swin_base_patch4_window7_224', pretrained=False, num_classes=0)
-            model = SWINWithDropout(swin_base, num_classes=num_classes, dropout=0.3)
+            # The current training metadata identifies EfficientNet-B3 as the trained model.
+            # Load it first: it is substantially lighter/faster on CPU than Swin-Base.
+            model = timm.create_model("efficientnet_b3", pretrained=False, num_classes=num_classes)
             checkpoint = torch.load(MODEL_PATH, map_location=device)
-            model.load_state_dict(checkpoint['model_state_dict'])
+            state_dict = checkpoint["model_state_dict"]
+            if any(k.startswith("base.") for k in state_dict.keys()):
+                new_state_dict = {}
+                for k, v in state_dict.items():
+                    if k.startswith("base."):
+                        new_k = k[len("base."):].replace("classifier.1.", "classifier.")
+                        new_state_dict[new_k] = v
+                state_dict = new_state_dict
+            model.load_state_dict(state_dict)
             model.to(device)
             model.eval()
             model_state.update({"model": model, "class_names": class_names, "loaded": True})
-            print(f"✅ SWIN Transformer loaded! Classes: {num_classes}, Device: {device}")
+            print(f"✅ EfficientNet-B3 loaded! Classes: {num_classes}, Device: {device}")
         except Exception as e:
             print(f"⚠️  Could not load SWIN model: {e}")
             try:
