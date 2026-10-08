@@ -1,5 +1,5 @@
 // pages/IoTPage.jsx
-import IoTSimulator from "../IoTSimulator";
+import IoTSimulator from "../Iotsimulator";
 import { useLang } from "../LanguageContext";
 export default function IoTPage() {
   const { lang } = useLang();
